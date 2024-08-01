@@ -83,7 +83,7 @@ watch(sudoDialog, (newVal) => {
     <v-footer fixed class="pa-0" color="primary">
       <v-container fluid fill-width class="ma-0 pa-0">
         <div class="d-flex justify-center ma-0 mp-0">
-          <v-btn href="https://studio.record-evolution.com/" target="_blank" variant="text" color="primary"
+          <v-btn href="https://studio.ironflock.com/" target="_blank" variant="text" color="primary"
             id="reswarm-link-button" rounded fixed>
             IronFlock Platform
           </v-btn>

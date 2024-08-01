@@ -18,8 +18,8 @@ win:
   publish:
     provider: github
     owner: RecordEvolution
-    repo: Reflasher
-    updaterCacheDirName: reflasher-updater
+    repo: FlockFlasher
+    updaterCacheDirName: flockflasher-updater
 nsis:
   artifactName: ${name}-setup.${ext}
   shortcutName: ${productName}
@@ -38,8 +38,8 @@ mac:
   publish:
     provider: github
     owner: RecordEvolution
-    repo: Reflasher
-    updaterCacheDirName: reflasher-updater
+    repo: FlockFlasher
+    updaterCacheDirName: flockflasher-updater
 dmg:
   artifactName: ${name}-${arch}.${ext}
 linux:
@@ -48,8 +48,8 @@ linux:
   publish:
     provider: github
     owner: RecordEvolution
-    repo: Reflasher
-    updaterCacheDirName: reflasher-updater
+    repo: FlockFlasher
+    updaterCacheDirName: flockflasher-updater
 appImage:
   artifactName: ${name}.${ext}
 npmRebuild: false

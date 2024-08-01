@@ -72,7 +72,7 @@ export const useFlashStore = () => {
             (b) => b.model === config?.board?.model
           ) as SupportedBoard
 
-          // It can happen that the boards are not intialized (e.g. when opening Reflasher with .flock file)
+          // It can happen that the boards are not intialized (e.g. when opening FlockFlasher with .flock file)
           // In that case we just fallback to the actual config
           config.board = board ?? config.board
 

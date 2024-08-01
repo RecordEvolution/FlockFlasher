@@ -19,7 +19,8 @@
     "release": "electron-builder",
     "build": "npm run typecheck && electron-vite build",
     "build:win": "npm run build && electron-builder --win --config",
-    "build:mac": "npm run build && electron-builder --mac --config",
+    "build:mac": "npm run build && electron-builder --mac --config --x64",
+    "build:macm1": "npm run build && electron-builder --mac --config",
     "build:linux": "npm run build && electron-builder --linux --config"
   },
   "dependencies": {

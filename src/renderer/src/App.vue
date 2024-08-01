@@ -53,7 +53,7 @@ watch(sudoDialog, (newVal) => {
       <div>
         <v-toolbar-title>
           <div style="display: flex; justify-content: center; align-items: center;">
-            <img :src="flockFlasherLogo" alt="Reflasher-logo" width="30" height="30" style="margin-right: 10px;" />
+            <img :src="flockFlasherLogo" alt="FlockFlasher-logo" width="30" height="30" style="margin-right: 10px;" />
             <p>FlockFlasher</p>
           </div>
         </v-toolbar-title>

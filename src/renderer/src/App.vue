@@ -165,9 +165,8 @@ watch(sudoDialog, (newVal) => {
   font-family: sans-serif;
   font-size: 0.8em;
   color: white !important;
-  letter-spacing: 0.1px;
-  padding: 0px;
-  padding-top: 0px;
+  letter-spacing: 0.3px;
+  padding: 0px 12px;
 }
 
 #snacker-message {

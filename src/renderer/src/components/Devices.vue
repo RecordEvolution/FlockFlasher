@@ -106,16 +106,16 @@ watch(drives, (updatedDl) => {
                 </div>
                 <div class="textDesc">
                   {{
-                    cutInfoString(flashItem.reswarm?.config?.swarm_name ?? '', 25, $t('no_swarm'))
-                  }}
-                </div>
-                <div class="textMain">
-                  {{
                     cutInfoString(
                       flashItem.reswarm?.config?.swarm_owner_name ?? '',
                       25,
                       $t('no_swarm_owner')
                     )
+                  }}
+                </div>
+                <div class="textMain">
+                  {{
+                    cutInfoString(flashItem.reswarm?.config?.swarm_name ?? '', 25, $t('no_swarm'))
                   }}
                 </div>
               </div>

@@ -21,8 +21,8 @@ async function setSudoPassword() {
     snackstore.setText('errors.invalid_sudo_password')
     snackstore.setColor('error')
     snackstore.setVisible(true)
-
-    return reject.value()
+    
+    return // do nothing
   } finally {
     checkingPassword.value = false
   }
@@ -92,28 +92,14 @@ watch(showDialog, (newVal) => {
         </v-container>
 
         <v-container py-2>
-          <v-text-field
-            v-model="sudoPassword"
-            autofocus
-            :append-icon="showSudoPassword ? 'mdi-eye' : 'mdi-eye-off'"
-            :type="showSudoPassword ? 'text' : 'password'"
-            name="input-sudoPasswd"
-            variant="outlined"
-            :label="$t('admin_password')"
-            :disabled="checkingPassword"
-            @click:append="showSudoPassword = !showSudoPassword"
-            v-on:keyup.enter="setSudoPassword"
-          ></v-text-field>
+          <v-text-field v-model="sudoPassword" autofocus :append-icon="showSudoPassword ? 'mdi-eye' : 'mdi-eye-off'"
+            :type="showSudoPassword ? 'text' : 'password'" name="input-sudoPasswd" variant="outlined"
+            :label="$t('admin_password')" :disabled="checkingPassword"
+            @click:append="showSudoPassword = !showSudoPassword" v-on:keyup.enter="setSudoPassword"></v-text-field>
         </v-container>
 
         <div class="d-flex justify-center">
-          <v-btn
-            small
-            color="secondary"
-            rounded
-            :loading="checkingPassword"
-            @click="setSudoPassword"
-          >
+          <v-btn small color="secondary" rounded :loading="checkingPassword" @click="setSudoPassword">
             <v-icon left> mdi-exit-to-app </v-icon>
             {{ $t('submit') }}
           </v-btn>

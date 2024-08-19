@@ -6,7 +6,7 @@ import { deepToRaw } from '@renderer/utils'
 import path from 'path-browserify'
 import { useSnackStore } from './snack'
 
-const imageTypes = ['reswarm', 'iso', 'img'] as const
+const imageTypes = ['flock', 'reswarm', 'iso', 'img'] as const
 type ImageType = (typeof imageTypes)[number]
 
 type FlashStoreState = {
@@ -62,7 +62,7 @@ export const useFlashStore = () => {
           drive: defaultDrive
         }
 
-        if (fileType === 'reswarm') {
+        if (fileType === 'flock' || fileType === 'reswarm') {
           const configFileString = (await window.api.readFile(fullPath, {
             encoding: 'utf8'
           })) as string
@@ -72,7 +72,7 @@ export const useFlashStore = () => {
             (b) => b.model === config?.board?.model
           ) as SupportedBoard
 
-          // It can happen that the boards are not intialized (e.g. when opening Reflasher with .reswarm file)
+          // It can happen that the boards are not intialized (e.g. when opening FlockFlasher with .flock file)
           // In that case we just fallback to the actual config
           config.board = board ?? config.board
 

@@ -75,7 +75,7 @@ function createWindow() {
   })
 
   mainWindow.webContents.on('did-finish-load', () => {
-    mainWindow.setTitle(`Reflasher v${version}`)
+    mainWindow.setTitle(`FlockFlasher v${version}`)
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -132,7 +132,7 @@ app.on('before-quit', () => {
   app.releaseSingleInstanceLock()
 })
 
-app.setAsDefaultProtocolClient('reswarm')
+app.setAsDefaultProtocolClient('flock')
 app.on('open-file', async (event, path) => {
   event.preventDefault()
 

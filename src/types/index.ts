@@ -1,7 +1,7 @@
 import type { Drive } from 'drivelist'
 import type { WriteStep } from 'etcher-sdk/build/multi-write'
 
-export const imageTypes = ['reswarm', 'iso', 'img'] as const
+export const imageTypes = ['flock', 'reswarm', 'iso', 'img'] as const
 export type ImageType = (typeof imageTypes)[number]
 
 export enum RPC {

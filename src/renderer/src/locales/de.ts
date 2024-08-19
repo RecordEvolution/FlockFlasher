@@ -15,10 +15,10 @@ export default {
   add_device: 'Gerät hinzufügen',
   no_device_name: 'Kein Gerätename',
   no_devices_in_list: 'Keine Geräte in der Liste',
-  devices_list_subtitle: 'Füge ein Gerät hinzu durch Auswahl einer Reswarm oder Image Datei',
-  swarm: 'Schwarm',
-  no_swarm: 'Kein Schwarm',
-  no_swarm_owner: 'Kein Schwarmeigentümer',
+  devices_list_subtitle: 'Gerät hinzufügen durch Auswahl einer .flock- oder Image-Datei',
+  swarm: 'Flotte',
+  no_swarm: 'Keine Flotte',
+  no_swarm_owner: 'Kein Flotteneigentümer',
   drive: 'Laufwerk',
   no_drive: 'Kein Laufwerk',
   no_drives_available: 'Keine Laufwerke verfügbar',
@@ -59,7 +59,7 @@ export default {
   eta: 'ETA',
   authentication_required: 'Authentifizierung erforderlich',
   authentication_explanation:
-    'Bitte geben Sie Ihr Administrator Passwort für diesen Computer im unteren Feld ein, um dem Reflasher zu erlauben die ausgewählten Laufwerke zu überschreiben und alle Partition zu löschen',
+    'Bitte geben Sie Ihr Administrator Passwort für diesen Computer im unteren Feld ein, um dem FlockFlasher zu erlauben die ausgewählten Laufwerke zu überschreiben und alle Partition zu löschen',
   admin_password: 'Administrator Passwort',
   sd_cards_and_drives: 'SD Karten und USB Laufwerke',
   use_sd_cards_only: 'Benutze ausschließlich SD Karten',
@@ -72,8 +72,8 @@ export default {
   environment_variables_not_set:
     'Die folgende Umgebungsvariable ist ungültig oder nicht definiert: | Die folgenden Umgebungsvariablen sind ungültig oder nicht definiert:',
   please_ensure_environment_variables:
-    'Um den Reflasher zu benutzen, stellen Sie bitte sicher, dass diese Umgebungsvariable richtig definiert wurde. | Um den Reflasher verwenden zu können, stellen Sie bitte sicher, dass die Umgebungsvariablen richtig definiert wurden.',
-  exit_reflasher: 'Reflasher beenden',
+    'Um den FlockFlasher zu benutzen, stellen Sie bitte sicher, dass diese Umgebungsvariable richtig definiert wurde. | Um den FlockFlasher verwenden zu können, stellen Sie bitte sicher, dass die Umgebungsvariablen richtig definiert wurden.',
+  exit_reflasher: 'FlockFlasher beenden',
   update_reagent: 'REagent aktualisieren',
   download_reagent: 'REagent herunterladen',
   docker_is_not_running: 'Docker läuft nicht',
@@ -99,8 +99,8 @@ export default {
   check_speed_drive: 'Kontrollieren Sie die angegebene Geschwindigkeit Ihres Flash-Laufwerks',
   check_documentation: 'Lesen Sie die Dokumentation',
   update: {
-    announce: 'Reflasher Update verfügbar',
-    download: 'Lade Reflasher Update',
+    announce: 'FlockFlasher Update verfügbar',
+    download: 'Lade FlockFlasher Update',
     install: 'Beenden und Update installieren ?'
   },
   agent: {

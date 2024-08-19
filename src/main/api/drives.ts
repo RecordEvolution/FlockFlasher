@@ -163,6 +163,7 @@ export const automountDriveLinux = async (drive: Drive) => {
 export const waitForMount = async (description: string) => {
   while (true) {
     const drives = await listdrives()
+    console.log(drives)
     const drive = drives.filter((d) => d.isRemovable && d.description === description)
     if (drive.length === 1) {
       if (drive[0].mountpoints.length !== 0) {

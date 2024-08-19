@@ -15,10 +15,10 @@ export default {
   add_device: 'Add device',
   no_device_name: 'No device name',
   no_devices_in_list: 'No devices in list',
-  devices_list_subtitle: 'Add device by selecting a Reswarm or image file',
-  swarm: 'Swarm',
-  no_swarm: 'No Swarm',
-  no_swarm_owner: 'No Swarm owner',
+  devices_list_subtitle: 'Add a device by selecting a .flock or disk image file',
+  swarm: 'Fleet',
+  no_swarm: 'No Fleet',
+  no_swarm_owner: 'No fleet owner',
   drive: 'Drive',
   no_drive: 'No drive',
   no_drives_available: 'No drives available',
@@ -59,7 +59,7 @@ export default {
   eta: 'ETA',
   authentication_required: 'Authentication required',
   authentication_explanation:
-    'To allow the Reflasher to erase your selected drives and overwrite any partitions on these, please enter your admin password for this computer in the field below.',
+    'To allow the FlockFlasher to erase your selected drives and overwrite any partitions on these, please enter your admin password for this computer in the field below.',
   admin_password: 'Admin password',
   sd_cards_and_drives: 'SD cards and USB flash drives',
   use_sd_cards_only: 'Use SD cards only',
@@ -72,8 +72,8 @@ export default {
   environment_variables_not_set:
     'The following environment variable is invalid or not set: | The following environment variables are invalid or not set:',
   please_ensure_environment_variables:
-    'In order to use the Reflasher, please ensure that this environment variable has been properly defined. | In order to use the Reflasher, please ensure that these environment variables have been properly defined.',
-  exit_reflasher: 'Exit Reflasher',
+    'In order to use the FlockFlasher, please ensure that this environment variable has been properly defined. | In order to use the FlockFlasher, please ensure that these environment variables have been properly defined.',
+  exit_reflasher: 'Exit FlockFlasher',
   update_reagent: 'Update REagent',
   download_reagent: 'Download REagent',
   docker_is_not_running: 'Docker is not running',
@@ -101,8 +101,8 @@ export default {
     currently_running: 'Currently running: {name}'
   },
   update: {
-    announce: 'New Reflasher release available',
-    download: 'Downloading Reflasher release',
+    announce: 'New FlockFlasher release available',
+    download: 'Downloading FlockFlasher release',
     install: 'Quit and install new version ?'
   },
   errors: {

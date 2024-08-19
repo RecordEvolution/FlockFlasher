@@ -32,8 +32,22 @@ const copyConfigFile = async (drive: Drive, reswarmConfigPath: string) => {
   }
 
   const targetPath = mountedDrive.mountpoints[0].path
+  const fileBaseName = path.basename(reswarmConfigPath)
 
-  return copyFile(reswarmConfigPath, path.join(targetPath, path.basename(reswarmConfigPath)))
+  // Backwards compatibility for .flock files
+  // It will always create a second config file with the name .reswarm in case a .flock file is provided
+  try {
+    const fileBaseNameSplit = fileBaseName.split(".")
+    if (fileBaseNameSplit[1] === 'flock') {
+      const dotReswarmFileName = fileBaseNameSplit[0] + '.reswarm'
+      console.log("Creating copy of .flock file as .reswarm for backwards compatibility")
+      await copyFile(reswarmConfigPath, path.join(targetPath, dotReswarmFileName))  
+    }
+  } catch (error) {
+    console.error("Failed to copy a copy of .flock")
+  }
+
+  return copyFile(reswarmConfigPath, path.join(targetPath, fileBaseName))
 }
 
 const getReswarmImage = async (
@@ -85,6 +99,9 @@ const getReswarmImage = async (
       updateState({ percentage, type: 'extracting-iso' })
     })
 
+    await writeFileISOContents(`boot/${config.name}.flock`, JSON.stringify(config), deviceId)
+
+    // Backwards compatibility
     await writeFileISOContents(`boot/${config.name}.reswarm`, JSON.stringify(config), deviceId)
 
     const recreatedImagePath = await rebuildISOFromContents(imagePath, deviceId, (percentage) => {

@@ -1,5 +1,5 @@
-appId: com.recordevolution.reflasher
-productName: Reflasher
+appId: com.recordevolution.flockflasher
+productName: FlockFlasher
 afterSign: './scripts/notarize.js'
 directories:
   buildResources: build
@@ -13,13 +13,13 @@ files:
 asarUnpack:
   - resources/**
 win:
-  executableName: Reflasher
+  executableName: FlockFlasher
   requestedExecutionLevel: requireAdministrator
   publish:
     provider: github
     owner: RecordEvolution
-    repo: Reflasher
-    updaterCacheDirName: reflasher-updater
+    repo: FlockFlasher
+    updaterCacheDirName: flockflasher-updater
 nsis:
   artifactName: ${name}-setup.${ext}
   shortcutName: ${productName}
@@ -38,8 +38,8 @@ mac:
   publish:
     provider: github
     owner: RecordEvolution
-    repo: Reflasher
-    updaterCacheDirName: reflasher-updater
+    repo: FlockFlasher
+    updaterCacheDirName: flockflasher-updater
 dmg:
   artifactName: ${name}-${arch}.${ext}
 linux:
@@ -48,16 +48,24 @@ linux:
   publish:
     provider: github
     owner: RecordEvolution
-    repo: Reflasher
-    updaterCacheDirName: reflasher-updater
+    repo: FlockFlasher
+    updaterCacheDirName: flockflasher-updater
 appImage:
   artifactName: ${name}.${ext}
 npmRebuild: false
 protocols:
+  - name: ironflock-protocol
+    schemes:
+      - flock
   - name: reswarm-protocol
     schemes:
       - reswarm
 fileAssociations:
+  - ext: flock
+    description: IronFlock Device File
+    icon: src/assets/icons/icon.icns
+    mimeType: text/x-reswarm
+    role: Viewer
   - ext: reswarm
     description: Reswarm Device File
     icon: src/assets/icons/icon.icns

@@ -63,7 +63,7 @@ function handleChooseFile(mainWindow: BrowserWindow) {
   const options: OpenDialogOptions = {
     title: 'Select file',
     defaultPath: process.env.HOME + '/Downloads',
-    filters: [{ name: '.reswarm, .img, .iso', extensions: [...imageTypes] }],
+    filters: [{ name: '.flock, .img, .iso, .reswarm', extensions: [...imageTypes] }],
     properties: ['openFile', 'multiSelections']
   }
 

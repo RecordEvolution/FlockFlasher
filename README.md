@@ -1,4 +1,4 @@
-# Reflasher
+# FlockFlasher
 
 All you need to debug the application is:
 
@@ -16,7 +16,7 @@ The machine itself should do the rest.
 
 On Github, it should automatically create a release entry in the list with the latest version string.
 
-[Releases](https://github.com/RecordEvolution/Reflasher/releases)
+[Releases](https://github.com/RecordEvolution/FlockFlasher/releases)
 
 Before putting the release public, make sure that all releases have been pushed for all devices.
 
@@ -29,19 +29,19 @@ In other words, you have to manually stitch both files together as follows:
 ```
 version: 2.0.3
 files:
-  - url: Reflasher-2.0.3-mac.zip
+  - url: FlockFlasher-2.0.3-mac.zip
     sha512: pfNijx9AZuFEzN7/UTDhoKlKeG72A+c3EdGoBE+X6fyn7nO1ZO8McNcZFaExbO0RhN+svnqF6JrWPenIKEfdSQ==
     size: 133448877
-  - url: Reflasher-2.0.3-arm64-mac.zip
+  - url: FlockFlasher-2.0.3-arm64-mac.zip
     sha512: 8XOTrqvnGfmM1V9MAivyQ9BPbWyqtkTQ16pZAzSCRUwgLTtRswJZJ0cHIqYw1+6+yRWFdIgQXt1cu6YWkUpWzg==
     size: 128751915
-  - url: reflasher-x64.dmg
+  - url: flockflasher-x64.dmg
     sha512: b9XzDuF/+c3JCA/LLFciLUqyOw12xHmh0vZkZpvS6V8GCzFmz1maEXOkBYAYv9YQLcxhGaM0aMMVuQNiWHgjGg==
     size: 138481744
-  - url: reflasher-arm64.dmg
+  - url: flockflasher-arm64.dmg
     sha512: jFZIxhz615EI2autjm4wnKOLGZchSKNOd3zmlRMFXdQjFEIZz6C8szgzjlYyzCfYH5hPOc+EQgbDVPIOla3Zew==
     size: 133845710
-path: Reflasher-2.0.3-mac.zip
+path: FlockFlasher-2.0.3-mac.zip
 sha512: pfNijx9AZuFEzN7/UTDhoKlKeG72A+c3EdGoBE+X6fyn7nO1ZO8McNcZFaExbO0RhN+svnqF6JrWPenIKEfdSQ==
 releaseDate: '2024-01-10T13:54:20.948Z'
 ```
@@ -58,15 +58,15 @@ After that, the `npm run release` process will automatically notarize the app fo
 
 ## EtcherSDK
 
-Reflasher uses the etcher-sdk to flash and mount drives.
+FlockFlasher uses the etcher-sdk to flash and mount drives.
 
 The `etcher-sdk` requires root permissions to access drives and flash drives.
 
-In the current build for MacOS and Linux, we must spawn a subprocess within the Reflasher that gets elevated.
+In the current build for MacOS and Linux, we must spawn a subprocess within the FlockFlasher that gets elevated.
 
 The easiest way to do that is to spawn a root process using sudo. This process will be a node process that runs the `etcher-sdk` code.
 
-To do so, we create an external JavaScript script that uses the `etcher-sdk`. This script needs to point to the node_modules that are contained within the application (for production). To do so, we point to the compressed (ASAR) node_modules [in the code](https://github.com/RecordEvolution/Reflasher/blob/3400ca34a438af2653ee1dfc364cd3f066cdc7fd/src/main/api/flash.ts#L121).
+To do so, we create an external JavaScript script that uses the `etcher-sdk`. This script needs to point to the node_modules that are contained within the application (for production). To do so, we point to the compressed (ASAR) node_modules [in the code](https://github.com/RecordEvolution/FlockFlasher/blob/3400ca34a438af2653ee1dfc364cd3f066cdc7fd/src/main/api/flash.ts#L121).
 
 
 To learn more about the compressed ASAR package: https://www.electronjs.org/docs/latest/tutorial/asar-archives
@@ -76,14 +76,14 @@ Since we don't want to rely on the user having the `node` binary installed, we c
 
 The electron binary can be accessed on `process.execPath` within the application and can be put into 'node mode' using the `ELECTRON_RUN_AS_NODE` environment variable.
 
-Since we spawn a subprocess, we need to be able to read back the flashing progress of this subprocess. To do so, we print the progress data to the stdout in JSON string, which is then read and parsed in the frontend. ([Line in code](https://github.com/RecordEvolution/Reflasher/blob/3400ca34a438af2653ee1dfc364cd3f066cdc7fd/src/main/api/flash.ts#L154))
+Since we spawn a subprocess, we need to be able to read back the flashing progress of this subprocess. To do so, we print the progress data to the stdout in JSON string, which is then read and parsed in the frontend. ([Line in code](https://github.com/RecordEvolution/FlockFlasher/blob/3400ca34a438af2653ee1dfc364cd3f066cdc7fd/src/main/api/flash.ts#L154))
 
 
 ### Windows
 
 In order to access the USB drives in Windows, the `etcher-sdk` must include the `winusb-driver-generator` package. When running the `npm i` command on Windows, it will automatically and temporarily add this package using the `scripts/windows.js` script.
 
-In order for Gulp to be able to build the Reflasher on Windows, it must compile the underlying winusb driver.
+In order for Gulp to be able to build FlockFlasher on Windows, it must compile the underlying winusb driver.
 
 Before you can do this, you must have the [Windows Driver Kit](https://learn.microsoft.com/en-us/windows-hardware/drivers/download-the-wdk) (WDK) installed.
 
@@ -91,7 +91,7 @@ There's a known issue where the `WDF redistributable co-installers don't work`, 
 
 ### AppImages (Linux)
 
-For AppImages, it is sadly not straightforward to access the packaged node_modules within the application. Since the AppImage is technically a drive, we must first mount it to a temporary folder ([link to code](https://github.com/RecordEvolution/Reflasher/blob/3400ca34a438af2653ee1dfc364cd3f066cdc7fd/src/main/api/permissions.ts#L169)) and then access the packaged node modules within.
+For AppImages, it is sadly not straightforward to access the packaged node_modules within the application. Since the AppImage is technically a drive, we must first mount it to a temporary folder ([link to code](https://github.com/RecordEvolution/FlockFlasher/blob/3400ca34a438af2653ee1dfc364cd3f066cdc7fd/src/main/api/permissions.ts#L169)) and then access the packaged node modules within.
 
 
 ## Electron / Vue

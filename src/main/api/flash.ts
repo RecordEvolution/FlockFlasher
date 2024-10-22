@@ -136,8 +136,10 @@ export const flashDevice = async (
   }
 
   const etcherSDKRequire = getNodeModulesResourcePath('etcher-sdk')
+  const etcherSDKPath = require.resolve('etcher-sdk'); 
+  console.log('etcherSDKRequire', etcherSDKRequire, etcherSDKPath)
   const scriptContent = `
-    const { sourceDestination, multiWrite } = require('${etcherSDKRequire}')
+    const { sourceDestination, multiWrite } = require('${etcherSDKPath}')
     let progressData;
 
     process.on('SIGTERM', () => {

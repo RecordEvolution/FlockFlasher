@@ -1,5 +1,8 @@
 # FlockFlasher
 
+
+You may need to fix something `npx electron-rebuild -f -w mountutils`.
+
 All you need to debug the application is:
 
 `npm run dev`

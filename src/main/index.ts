@@ -4,8 +4,9 @@ import { setupIpcHandlers } from './ipcHandlers'
 import { join } from 'path'
 import { activeProcesses, cleanupAppImageIfExists } from './api/permissions'
 import { isFile, killProcessDarwin } from './utils'
-import { autoUpdater } from 'electron-updater'
-import log from 'electron-log/main'
+import pkg from 'electron-updater';
+const { autoUpdater } = pkg;
+import log from 'electron-log/main.js'
 import fixPath from 'fix-path'
 import semver from 'semver'
 import installExtension from 'electron-devtools-installer'

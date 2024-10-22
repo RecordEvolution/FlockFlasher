@@ -10,9 +10,10 @@ import { cancelFlashing, flashDevice, imageManager } from './api/flash'
 import { isSudoPasswordSet, setSudoPassword } from './api/permissions'
 import { Drive } from 'drivelist'
 import { agentManager, hasDocker } from './api/agent'
-import { autoUpdater } from 'electron-updater'
+import pkg from 'electron-updater';
+const { autoUpdater } = pkg;
 
-function handleListDrives() {
+async function handleListDrives() {
   return listDrives()
 }
 

@@ -141,7 +141,7 @@ const elevatedNodeChildProcessUnix = async (
 
     command = path.join(APPIMAGE_MOUNT_POINT, executableName)
   }
-
+  console.log('scriptPath', command, scriptPath)
   await fs.writeFile(scriptPath, code)
 
   return childProcess(

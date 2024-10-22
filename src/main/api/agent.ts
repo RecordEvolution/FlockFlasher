@@ -5,7 +5,7 @@ import { REFLASHER_CONFIG_PATH } from './boards'
 import { childProcess, execAsync } from './permissions'
 import fs, { access, mkdir } from 'fs/promises'
 import { ChildProcessWithoutNullStreams } from 'child_process'
-import { EventEmitter } from 'stream'
+import { EventEmitter } from 'events'
 import fetch from 'node-fetch'
 
 type AgentState = 'active' | 'inactive' | 'failed'

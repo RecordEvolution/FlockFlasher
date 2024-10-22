@@ -1,12 +1,10 @@
 import { Drive, list as listdrives } from 'drivelist'
 import { elevatedNodeChildProcess, elevatedExecUnix, execAsync } from './permissions'
-import { getNodeModulesResourcePath } from '../utils'
 
 export async function listDrives() {
   const drives = await listdrives()
   return drives.filter(
     (d) =>
-      !d.mountpoints.find((m) => m.path.includes('boot')) &&
       d.busType !== 'UNKNOWN' &&
       !d.isSystem &&
       !d.isReadOnly
@@ -180,16 +178,32 @@ export async function unmountDisk(drivePath: string) {
     actualDrivePath = actualDrivePath.replace(/\\/g, '\\\\')
   }
 
-  const mountutilsRequire = getNodeModulesResourcePath('mountutils')
   const scriptContent = `
-    const mountutils = require('${mountutilsRequire}');
+    const { exec } = require('child_process');
 
-    mountutils.unmountDisk("${actualDrivePath}", (err) => {
+    let command;
+
+    switch (process.platform) {
+      case 'darwin': // macOS
+        command = "diskutil unmount "${actualDrivePath}"";
+        break;
+      case 'linux': // Linux
+        command = "umount "${actualDrivePath}"";
+        break;
+      case 'win32': // Windows
+        command = "mountvol "${actualDrivePath}" /p";
+        break;
+      default:
+        throw new Error('Unsupported platform');
+    }
+
+    exec(command, (err, stdout, stderr) => {
       if (err) {
-        process.stderr.write(err.message);
+        process.stderr.write(stderr);
         process.exit(1);
       }
 
+      console.log(stdout);
       process.exit(0);
     });
   `

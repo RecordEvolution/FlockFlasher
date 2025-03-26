@@ -85,9 +85,18 @@ In order to access the USB drives in Windows, the `etcher-sdk` must include the 
 
 In order for Gulp to be able to build FlockFlasher on Windows, it must compile the underlying winusb driver.
 
-Before you can do this, you must have the [Windows Driver Kit](https://learn.microsoft.com/en-us/windows-hardware/drivers/download-the-wdk) (WDK) installed.
+Before you can do this, you must have the [Windows Driver Kit](https://learn.microsoft.com/en-us/windows-hardware/drivers/download-the-wdk) (WDK) installed. This can also be installed as a component during the Visual Studio installation process.
+
+I 
 
 There's a known issue where the `WDF redistributable co-installers don't work`, which is required in order to build the windows usb driver. Solutions can be found [here](https://learn.microsoft.com/en-us/windows-hardware/drivers/wdk-known-issues).
+
+Install python and the Visual Studio Build Tools as well. Install `pip install setuptools`. Also I ended up finding and copying two files into this path:
+C:\Program Files (x86)\Windows Kits\10\Redist\wdf\x64
+
+WdfCoInstaller01011.dll
+winusbcoinstaller2.dll
+
 
 ### AppImages (Linux)
 

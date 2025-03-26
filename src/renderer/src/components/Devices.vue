@@ -284,8 +284,8 @@ watch(drives, (updatedDl) => {
               v-if="flashItem.reswarm && flashItem.flash.state === 'idle'"
               v-model="flashItem.reswarm.config!.board"
               :label="$t('choose_board_and_os')"
-              :items="boards"
-              :item-title="(el: SupportedBoard) => el.modelname"
+              :items="boards.slice().sort((a, b) => a.modelname.localeCompare(b.modelname))"
+              :item-title="(el: SupportedBoard) => el.modelname + ' (' + el.architecture + ') ' + el.latestImages?.[0].version"
               :item-value="(el) => el"
               variant="outlined"
             ></v-select>

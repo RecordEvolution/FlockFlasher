@@ -9,6 +9,8 @@ npm run dev            # Development mode with HMR (electron-vite)
 npm run dev:debug      # Dev mode with --inspect for the main process
 npm run build          # Typecheck + electron-vite build
 npm run typecheck      # tsc for main/preload (tsconfig.node.json) + vue-tsc for renderer (tsconfig.web.json)
+npm test               # Vitest unit tests (test/*.test.ts) — pure logic in src/main/security + utils
+npm run test:watch     # Vitest watch mode
 npm run lint           # ESLint with --fix
 npm run format         # Prettier
 npm run release        # electron-builder (publishes to GitHub releases)
@@ -17,7 +19,7 @@ npm run build:macm1    # Build + release macOS arm64
 npm run build:win      # Build + release Windows
 npm run build:linux    # Build + release Linux AppImage
 ```
-There is no test suite. VS Code users can use the "Debug All" compound launch config (main + renderer debugging).
+Vitest covers only the pure, Electron-free modules (validation, sudo-arg building, sha256, progress math); elevated flashing and drive I/O are covered by manual per-OS smoke tests. VS Code users can use the "Debug All" compound launch config (main + renderer debugging). Dev/CI Node is pinned by `.nvmrc` + `engines` to Node 18 (`nvm use`).
 
 ## Critical Constraints
 - **Electron is pinned to 19.x** — etcher-sdk breaks on Electron 20+ due to security changes (https://github.com/balena-io/etcher/issues/4087). Do not upgrade Electron.
@@ -33,12 +35,19 @@ There is no test suite. VS Code users can use the "Debug All" compound launch co
 - `src/renderer/` — Vue app. Pinia stores in `src/renderer/src/store/` own all backend calls and event subscriptions (e.g. `flash.ts` listens for `flash-progress`). Locales live in `src/renderer/src/locales/`; `@renderer` is aliased to `src/renderer/src`.
 
 ### RPC contract
-The `RPC` enum in `src/types/index.ts` is the single registry of invoke channel names. Adding an endpoint means touching three files: `src/types/index.ts` (enum), `src/main/ipcHandlers.ts` (handler), `src/preload/index.ts` (api wrapper). Main→renderer push events use `webContents.send` with ad-hoc channels: `flash-progress`, `drive-scanner-attach/detach/progress/error`, `agent-logs`, `agent-state`, `agent-download-progress`, `update-status`, `add-image-item`.
+The `RPC` enum in `src/types/index.ts` is the single registry of invoke channel names. Adding an endpoint means touching three files: `src/types/index.ts` (enum), `src/main/ipcHandlers.ts` (handler), `src/preload/index.ts` (api wrapper). Main→renderer push events use `webContents.send` with ad-hoc channels: `flash-progress`, `drive-scanner-attach/detach/progress/error`, `agent-logs`, `agent-state`, `agent-download-progress`, `update-status`, `add-image-item`. The preload allowlists these channel names (`SEND_CHANNELS` / `RECEIVE_CHANNELS`) — new channels must be added there too.
+
+### Security model (`src/main/security/`) — read before touching privileged code
+The main process runs as **root**, and `.flock`/`.reswarm` files plus board metadata are **untrusted input**. Two rules hold the line:
+- **Never interpolate untrusted data into a shell string or into elevated-script source.** All privileged commands go through argv: `elevatedSpawn(cmd, argsArray)` / `spawnAsync` (no shell, no `command.split(' ')`) in `permissions.ts`. The two elevated Node scripts are FIXED constants in `security/elevated-scripts.ts` that read their inputs from `process.argv`; `elevatedNodeChildProcess(code, scriptArgs)` passes data as argv. There is a test (`test/elevated-scripts.test.ts`) asserting these scripts contain no `${…}`.
+- **Validate at the boundary.** `security/validation.ts` (`assertValidDevicePath`, `assertValidReswarmConfig`, `isSafePathSegment`) is enforced in every privileged `ipcHandlers.ts` handler and again at config ingestion in `flash.ts`. `ipcHandlers` also cross-checks the flash target against `listDrives()` so the renderer can't aim a write at a system disk. `RPC.ReadFile` is scoped to `.flock`/`.reswarm` reads only.
+- Downloaded artifacts are verified: `security/integrity.ts` (`verifyFileSha256`) is wired into the image download (`flash.ts` checks `ImageInfo.sha256` on the decompressed image); `downloadFile` (`utils/index.ts`) checks HTTP status, verifies byte count, and writes to a `.part` temp then atomically renames.
+- Renderer runs with `nodeIntegration:false` + `contextIsolation:true`; navigation is confined to the app origin (`will-navigate`/`will-redirect` in `index.ts`). `sandbox:true` is still pending (needs a self-contained preload) — see the Electron upgrade note below.
 
 ### Elevated flashing (`flash.ts` + `permissions.ts` + `utils/index.ts`)
-The core trick: `flashDevice()` generates a standalone JS script (as a string) that requires etcher-sdk and does the actual write, saves it to a temp file, and runs it with the Electron binary in Node mode (`ELECTRON_RUN_AS_NODE=1`, `process.execPath`) — so users don't need Node installed.
+`flashDevice()` runs the FIXED `FLASH_SCRIPT` (from `security/elevated-scripts.ts`) with the Electron binary in Node mode (`ELECTRON_RUN_AS_NODE=1`, `process.execPath`) so users don't need Node installed. The image path, drive JSON, final state and etcher-sdk module path are passed as `process.argv[2..5]` — never interpolated into the script.
 - macOS/Linux: spawned via `sudo -E -S` with the sudo password piped to stdin. The password is collected by `SudoDialog.vue` and held in memory in `permissions.ts` (never persisted).
-- Windows: no elevation needed (app already runs as admin); paths must be double-escaped (`\\` → `\\\\`) before being embedded in the generated script.
+- Windows: no elevation needed (app already runs as admin). No path escaping is required anymore — argv values are passed literally.
 - In production, the script requires etcher-sdk from inside the packaged archive: `app.asar/node_modules` (see `getNodeModulesResourcePath`). On Linux AppImage the app image must first be loop-mounted to a temp dir to reach those resources (`mountAppImage` in `permissions.ts`).
 - Progress flows back as JSON `Progress` objects written to the subprocess stdout, parsed by the parent, and forwarded to the renderer. Cancellation sends SIGTERM (via elevated `kill` on macOS).
 

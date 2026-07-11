@@ -20,11 +20,11 @@ const MAX_CONFIG_READ_BYTES = 5 * 1024 * 1024
 // Cross-check a renderer-supplied drive against the real removable-drive list so a
 // compromised renderer can't aim a privileged write at an arbitrary/system disk.
 async function assertFlashableDrive(drive: Drive | undefined): Promise<void> {
-  assertValidDevicePath(drive?.device)
+  const device = assertValidDevicePath(drive?.device)
   const available = await listDrives()
-  const match = available.find((d) => d.device === drive!.device)
+  const match = available.find((d) => d.device === device)
   if (!match) {
-    throw new Error(`Selected drive is not an available removable drive: ${drive!.device}`)
+    throw new Error(`Selected drive is not an available removable drive: ${device}`)
   }
 }
 
@@ -146,7 +146,10 @@ function handleAgentEvents(mainWindow: BrowserWindow) {
 
 async function handleTestDevice(flashItem: FlashItem) {
   const configPath = flashItem?.reswarm?.configPath
-  if (typeof configPath !== 'string' || !READABLE_CONFIG_EXTENSIONS.includes(path.extname(configPath).toLowerCase())) {
+  if (
+    typeof configPath !== 'string' ||
+    !READABLE_CONFIG_EXTENSIONS.includes(path.extname(configPath).toLowerCase())
+  ) {
     throw new Error('Invalid or missing device config path')
   }
   if (flashItem.reswarm?.config) {

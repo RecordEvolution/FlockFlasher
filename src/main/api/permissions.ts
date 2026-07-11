@@ -129,7 +129,13 @@ export const spawnAsync = async (
       if (idx !== -1) activeProcesses.splice(idx, 1)
 
       if (error || (code != null && code !== 0)) {
-        return rej({ error, code, signal, stdout: stdoutData.join(''), stderr: stderrData.join('') })
+        return rej({
+          error,
+          code,
+          signal,
+          stdout: stdoutData.join(''),
+          stderr: stderrData.join('')
+        })
       }
 
       res({ stdout: stdoutData.join(''), stderr: stderrData.join(''), code, signal })
@@ -254,8 +260,7 @@ export const childProcess = (
   onExit?: (code: number | null, signal: NodeJS.Signals | null) => void,
   options?: SpawnOptionsWithoutStdio & { elevated?: boolean }
 ) => {
-
-  const sudoSupportedOS = (process.platform === 'linux' || process.platform === 'darwin')
+  const sudoSupportedOS = process.platform === 'linux' || process.platform === 'darwin'
   let finalCommand = command
   let finalArgs = args
   if (options?.elevated && sudoSupportedOS) {

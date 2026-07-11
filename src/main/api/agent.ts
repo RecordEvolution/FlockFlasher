@@ -29,7 +29,8 @@ class AgentManager extends EventEmitter {
   private downloadPromise: Promise<void> | null = null
   private agentProcess: ChildProcessWithoutNullStreams | null = null
   private agentDir = path.join(REFLASHER_CONFIG_PATH, 'agent')
-  private availableVersionsURL = 'https://instance-registry.ironflock.com/dl/re-agent/availableVersions.json'
+  private availableVersionsURL =
+    'https://instance-registry.ironflock.com/dl/re-agent/availableVersions.json'
 
   constructor() {
     super()
@@ -182,7 +183,6 @@ class AgentManager extends EventEmitter {
       this.emit('state', { state: this.state, activeItem: this.activeItem })
     })
   }
-
 
   async init() {
     await this.createAgentDirIfNotExists()

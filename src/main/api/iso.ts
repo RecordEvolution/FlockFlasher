@@ -184,7 +184,7 @@ const rebuildISOFromContents = async (
     `of=${bootPartitionImagePath}`
   ])
 
-  let newISOPathSplit = originalISOPath.split('.')
+  const newISOPathSplit = originalISOPath.split('.')
   newISOPathSplit.pop()
 
   const newISOPath = newISOPathSplit.join('.') + `-${deviceId}.iso`

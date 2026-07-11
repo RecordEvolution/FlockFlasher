@@ -5,12 +5,7 @@ import { getNodeModulesResourcePath } from '../utils'
 
 export async function listDrives() {
   const drives = await listdrives()
-  return drives.filter(
-    (d) =>
-      d.busType !== 'UNKNOWN' &&
-      !d.isSystem &&
-      !d.isReadOnly
-  )
+  return drives.filter((d) => d.busType !== 'UNKNOWN' && !d.isSystem && !d.isReadOnly)
 }
 
 const wait = (ms: number): Promise<void> => {

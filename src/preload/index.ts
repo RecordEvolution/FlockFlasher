@@ -1,8 +1,27 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import { FlashItem, RPC, SupportedBoard } from '../types'
-import { Drive } from 'drivelist'
-import { WiFiNetwork } from 'node-wifi'
+import { RPC } from '../types'
+import type { FlashItem, SupportedBoard } from '../types'
+import type { Drive } from 'drivelist'
+import type { WiFiNetwork } from 'node-wifi'
+
+// Only these push channels may cross the bridge. Renderer -> main is limited to a
+// single ready signal; main -> renderer is the fixed set of progress/event
+// channels. An arbitrary channel name from the renderer is ignored, so the bridge
+// can't be used to reach unrelated ipcMain listeners.
+const SEND_CHANNELS = ['image-item-store-ready'] as const
+const RECEIVE_CHANNELS = [
+  'add-image-item',
+  'flash-progress',
+  'agent-logs',
+  'agent-state',
+  'agent-download-progress',
+  'drive-scanner-attach',
+  'drive-scanner-detach',
+  'drive-scanner-progress',
+  'drive-scanner-error',
+  'update-status'
+] as const
 
 // Custom APIs for renderer
 const api = {
@@ -30,29 +49,26 @@ const api = {
 
 export type Api = typeof api
 
-// Use `contextBridge` APIs to expose Electron APIs to
-// renderer only if context isolation is enabled, otherwise
-// just add to the DOM global.
-if (process.contextIsolated) {
-  try {
-    contextBridge.exposeInMainWorld('electron', electronAPI)
-    contextBridge.exposeInMainWorld('api', api)
-    contextBridge.exposeInMainWorld('ipcRenderer', {
-      send: (channel, data) => {
-        ipcRenderer.send(channel, data)
-      },
-      receive: (channel, func) => {
-        ipcRenderer.on(channel, (_, ...args) => func(...args))
-      }
-    })
-  } catch (error) {
-    console.error(error)
-  }
-} else {
-  // @ts-ignore (define in dts)
-  window.electron = electronAPI
-  // @ts-ignore (define in dts)
-  window.api = api
-  // @ts-ignore
-  window.ipcRenderer = ipcRenderer
+// Context isolation must be on (it is set explicitly on the BrowserWindow). If it
+// is ever disabled, fail loudly rather than silently dumping the full electronAPI
+// and a raw ipcRenderer onto window — the old else-branch defeated the bridge.
+if (!process.contextIsolated) {
+  throw new Error('contextIsolation must be enabled')
+}
+
+try {
+  contextBridge.exposeInMainWorld('electron', electronAPI)
+  contextBridge.exposeInMainWorld('api', api)
+  contextBridge.exposeInMainWorld('ipcRenderer', {
+    send: (channel: string, data: unknown) => {
+      if (!(SEND_CHANNELS as readonly string[]).includes(channel)) return
+      ipcRenderer.send(channel, data)
+    },
+    receive: (channel: string, func: (...args: unknown[]) => void) => {
+      if (!(RECEIVE_CHANNELS as readonly string[]).includes(channel)) return
+      ipcRenderer.on(channel, (_, ...args) => func(...args))
+    }
+  })
+} catch (error) {
+  console.error(error)
 }

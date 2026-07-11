@@ -64,11 +64,35 @@ function createWindow() {
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
-      nodeIntegration: true,
+      // The renderer only reaches the main process through the contextBridge in
+      // preload, so it does not need Node in-process. Disabling nodeIntegration and
+      // enabling contextIsolation means an XSS/renderer flaw can no longer touch
+      // Node/root directly. sandbox stays false because the preload currently
+      // require()s bundled deps; enabling it needs a self-contained preload and is
+      // tracked with the Electron upgrade spike.
+      nodeIntegration: false,
+      contextIsolation: true,
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
     }
   })
+
+  // Confine the top frame to the app's own content; anything else (a redirect to a
+  // remote origin, a dropped file:// URL) is refused. External links are already
+  // routed to the OS browser by setWindowOpenHandler below.
+  const isAppUrl = (url: string): boolean => {
+    const rendererUrl = process.env['ELECTRON_RENDERER_URL']
+    if (is.dev && rendererUrl) return url.startsWith(rendererUrl)
+    return url.startsWith('file://')
+  }
+  const blockOffAppNavigation = (event: Electron.Event, url: string) => {
+    if (!isAppUrl(url)) {
+      event.preventDefault()
+      console.warn('Blocked navigation to', url)
+    }
+  }
+  mainWindow.webContents.on('will-navigate', blockOffAppNavigation)
+  mainWindow.webContents.on('will-redirect', blockOffAppNavigation)
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
@@ -82,13 +106,6 @@ function createWindow() {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
-
-  // Prevent external resources from being loaded (like images)
-  // when dropping them on the WebView.
-  // See https://github.com/electron/electron/issues/5919
-  // mainWindow.webContents.on('will-navigate', (event) => {
-  //   event.preventDefault()
-  // })
 
   setupIpcHandlers(mainWindow)
 

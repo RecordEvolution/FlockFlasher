@@ -4,6 +4,7 @@ import { ChildProcess } from 'child_process'
 import { FlashItem, Progress } from '../../types'
 import { elevatedNodeChildProcess } from './permissions'
 import { FLASH_SCRIPT } from '../security/elevated-scripts'
+import { assertValidReswarmConfig } from '../security/validation'
 import { copyFile, rename, unlink, writeFile } from 'fs/promises'
 import ImageManager, { REFLASHER_CONFIG_PATH } from './boards'
 import path from 'path'
@@ -55,6 +56,13 @@ const getReswarmImage = async (
   flashItem: FlashItem,
   updateState: (data: Partial<Progress>) => void
 ): Promise<string> => {
+  // Defense-in-depth: fields below (serial_number, name, image.file/download) flow
+  // into filesystem paths and the network. Validate before use even though the IPC
+  // boundary already checked, since this is the module that consumes them.
+  if (flashItem.reswarm?.config) {
+    assertValidReswarmConfig(flashItem.reswarm.config)
+  }
+
   const image = flashItem.reswarm?.config?.board.latestImages[0]
   let imagePath = flashItem.fullPath
 

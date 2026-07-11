@@ -2,26 +2,44 @@ import { BrowserWindow, OpenDialogOptions, dialog, ipcMain } from 'electron'
 import { FlashItem, RPC, imageTypes } from '../types'
 import { automountDrive, listDrives, listPartitions, unmountDisk } from '../main/api/drives'
 import { scanner } from 'etcher-sdk'
-import { readFile } from 'fs/promises'
-import { OpenMode } from 'fs'
-import { Abortable } from 'events'
+import { readFile, stat } from 'fs/promises'
+import path from 'path'
 import { scanNetworks } from './api/wifi'
 import { cancelFlashing, flashDevice, imageManager } from './api/flash'
 import { isSudoPasswordSet, setSudoPassword } from './api/permissions'
 import { Drive } from 'drivelist'
 import { agentManager, hasDocker } from './api/agent'
 import { autoUpdater } from 'electron-updater'
+import { assertValidDevicePath, assertValidReswarmConfig } from './security/validation'
+
+// Config files the renderer is allowed to read back through RPC.ReadFile.
+const READABLE_CONFIG_EXTENSIONS = ['.flock', '.reswarm']
+// Cap on a config file read so a malicious path can't stream a huge file into memory.
+const MAX_CONFIG_READ_BYTES = 5 * 1024 * 1024
+
+// Cross-check a renderer-supplied drive against the real removable-drive list so a
+// compromised renderer can't aim a privileged write at an arbitrary/system disk.
+async function assertFlashableDrive(drive: Drive | undefined): Promise<void> {
+  assertValidDevicePath(drive?.device)
+  const available = await listDrives()
+  const match = available.find((d) => d.device === drive!.device)
+  if (!match) {
+    throw new Error(`Selected drive is not an available removable drive: ${drive!.device}`)
+  }
+}
 
 function handleListDrives() {
   return listDrives()
 }
 
 function handleUnmount(_, drivePath: string) {
+  assertValidDevicePath(drivePath)
   unmountDisk(drivePath)
   return
 }
 
 function handleMount(_, drive: Drive) {
+  assertValidDevicePath(drive?.device)
   return automountDrive(drive)
 }
 
@@ -70,17 +88,24 @@ function handleChooseFile(mainWindow: BrowserWindow) {
   return dialog.showOpenDialog(mainWindow, options)
 }
 
-function handleReadFile(
-  _,
-  path: string,
-  options?:
-    | ({
-        encoding: BufferEncoding
-        flag?: OpenMode | undefined
-      } & Abortable)
-    | BufferEncoding
-) {
-  return readFile(path, options)
+// Scoped config reader. This used to be an arbitrary-file-read primitive exposed
+// to the renderer; it now only reads .flock/.reswarm config files, as utf8, with a
+// size cap — the sole legitimate use (parsing the config being flashed).
+async function handleReadFile(_, filePath: string) {
+  if (typeof filePath !== 'string' || filePath.length === 0) {
+    throw new Error('Invalid file path')
+  }
+
+  const ext = path.extname(filePath).toLowerCase()
+  if (!READABLE_CONFIG_EXTENSIONS.includes(ext)) {
+    throw new Error(`Refusing to read non-config file: ${ext || '(no extension)'}`)
+  }
+
+  const info = await stat(filePath)
+  if (!info.isFile()) throw new Error('Not a regular file')
+  if (info.size > MAX_CONFIG_READ_BYTES) throw new Error('Config file too large')
+
+  return readFile(filePath, { encoding: 'utf8' })
 }
 
 function handleSupportedBoards() {
@@ -91,7 +116,15 @@ function handleWifiScan() {
   return scanNetworks()
 }
 
-function handleFlashDevice(_, mainWindow: BrowserWindow, flashItem: FlashItem) {
+async function handleFlashDevice(_, mainWindow: BrowserWindow, flashItem: FlashItem) {
+  if (!flashItem || typeof flashItem.fullPath !== 'string') {
+    throw new Error('Invalid flash item')
+  }
+  await assertFlashableDrive(flashItem.drive)
+  if (flashItem.reswarm?.config) {
+    assertValidReswarmConfig(flashItem.reswarm.config)
+  }
+
   return flashDevice(flashItem, (progress) => {
     mainWindow.webContents.send('flash-progress', { progress, id: flashItem.id })
   })
@@ -111,8 +144,15 @@ function handleAgentEvents(mainWindow: BrowserWindow) {
   })
 }
 
-function handleTestDevice(flashItem: FlashItem) {
-  agentManager.startAgent(flashItem)
+async function handleTestDevice(flashItem: FlashItem) {
+  const configPath = flashItem?.reswarm?.configPath
+  if (typeof configPath !== 'string' || !READABLE_CONFIG_EXTENSIONS.includes(path.extname(configPath).toLowerCase())) {
+    throw new Error('Invalid or missing device config path')
+  }
+  if (flashItem.reswarm?.config) {
+    assertValidReswarmConfig(flashItem.reswarm.config)
+  }
+  return agentManager.startAgent(flashItem)
 }
 
 function handleStopDevice() {
@@ -144,6 +184,7 @@ function handleCancelFlashing(id: number) {
 }
 
 function handleListPartitions(drive: Drive) {
+  assertValidDevicePath(drive?.device)
   return listPartitions(drive)
 }
 

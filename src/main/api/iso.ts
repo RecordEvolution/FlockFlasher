@@ -104,7 +104,14 @@ const unmountISOWindows = async (devicePath: string) => {
 
 const writeFileISOContents = async (fileName: string, data, deviceId) => {
   const contentsPath = getISOContentsPath(deviceId)
-  return fsExtra.writeFile(`${contentsPath}/${fileName}`, data, { encoding: 'utf8', mode: 438 })
+  // Guard against path traversal via fileName (e.g. a crafted config.name): the
+  // resolved target must stay inside the ISO contents directory.
+  const target = path.resolve(contentsPath, fileName)
+  const root = path.resolve(contentsPath)
+  if (target !== root && !target.startsWith(root + path.sep)) {
+    throw new Error('Refusing to write outside the ISO contents directory')
+  }
+  return fsExtra.writeFile(target, data, { encoding: 'utf8', mode: 0o644 })
 }
 
 const blockSizes = {

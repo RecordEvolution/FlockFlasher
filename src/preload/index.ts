@@ -2,8 +2,6 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { FlashItem, RPC, SupportedBoard } from '../types'
 import { Drive } from 'drivelist'
-import type { OpenMode } from 'fs'
-import type { Abortable } from 'events'
 import { WiFiNetwork } from 'node-wifi'
 
 // Custom APIs for renderer
@@ -14,15 +12,8 @@ const api = {
   unmount: (path: string) => ipcRenderer.invoke(RPC.Unmount, path) as Promise<void>,
   mount: (drive: Drive) => ipcRenderer.invoke(RPC.Mount, drive) as Promise<void>,
   chooseFile: () => ipcRenderer.invoke(RPC.ChooseFile) as Promise<Electron.OpenDialogReturnValue>,
-  readFile: (
-    path: string,
-    options?:
-      | ({
-          encoding: BufferEncoding
-          flag?: OpenMode | undefined
-        } & Abortable)
-      | BufferEncoding
-  ) => ipcRenderer.invoke(RPC.ReadFile, path, options),
+  // Scoped in the main process to .flock/.reswarm config files; returns utf8 text.
+  readFile: (path: string) => ipcRenderer.invoke(RPC.ReadFile, path) as Promise<string>,
   getSupportedBoards: () => ipcRenderer.invoke(RPC.GetSupportedBoards) as Promise<SupportedBoard[]>,
   scanWifi: () => ipcRenderer.invoke(RPC.ScanWifi) as Promise<WiFiNetwork[]>,
   testDevice: (flashItem: FlashItem) => ipcRenderer.invoke(RPC.TestDevice, flashItem),

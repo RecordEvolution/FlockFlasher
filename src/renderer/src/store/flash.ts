@@ -63,9 +63,7 @@ export const useFlashStore = () => {
         }
 
         if (fileType === 'flock' || fileType === 'reswarm') {
-          const configFileString = (await window.api.readFile(fullPath, {
-            encoding: 'utf8'
-          })) as string
+          const configFileString = await window.api.readFile(fullPath)
 
           const config = JSON.parse(configFileString) as ReswarmConfig
           const board = boardStore.boards.find(

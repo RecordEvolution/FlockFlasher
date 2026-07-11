@@ -13,6 +13,8 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "start": "electron-vite preview",
     "postinstall": "node scripts/windows.js && electron-builder install-app-deps",
     "dev": "electron-vite dev",
@@ -83,6 +85,7 @@
     "prettier": "^3.0.2",
     "typescript": "^5.1.6",
     "vite": "^4.4.9",
+    "vitest": "^1.6.1",
     "vue": "^3.3.4",
     "vue-tsc": "^1.8.8"
   }

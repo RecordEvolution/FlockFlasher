@@ -5,20 +5,10 @@ import { Progress } from '../../types'
 import { is } from '@electron-toolkit/utils'
 import path from 'path'
 import { APPIMAGE_MOUNT_POINT, elevatedExec } from '../api/permissions'
+import { calculateSpeed, calculateETA } from './progress'
 
-export const calculateSpeed = (
-  written: number,
-  elapsedTime: number
-): { speed: number; averageSpeed: number } => {
-  const speed = written / elapsedTime // Bytes per second
-  const averageSpeed = written / (elapsedTime / 1000) // Bytes per second (convert elapsedTime to seconds)
-  return { speed, averageSpeed }
-}
-
-export const calculateETA = (written: number, speed: number, totalSize: number): number => {
-  const remainingBytes = totalSize - written
-  return remainingBytes / speed // Seconds
-}
+// Pure progress math lives in ./progress so it can be unit-tested without Electron.
+export { calculateSpeed, calculateETA } from './progress'
 
 export const getRemoteFileSize = (url: string): Promise<number> => {
   return new Promise((res, rej) => {

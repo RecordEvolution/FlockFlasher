@@ -29,7 +29,7 @@ class AgentManager extends EventEmitter {
   private downloadPromise: Promise<void> | null = null
   private agentProcess: ChildProcessWithoutNullStreams | null = null
   private agentDir = path.join(REFLASHER_CONFIG_PATH, 'agent')
-  private availableVersionsURL = 'https://storage.googleapis.com/re-agent/availableVersions.json'
+  private availableVersionsURL = 'https://instance-registry.ironflock.com/dl/re-agent/availableVersions.json'
 
   constructor() {
     super()
@@ -78,7 +78,9 @@ class AgentManager extends EventEmitter {
   }
 
   async getAgentVersion() {
-    const { stdout } = await execAsync(`${this.binaryName} -version`)
+    // Use the absolute agentPath, not the bare binary name (which relies on PATH
+    // and would never resolve to the downloaded binary in ~/.Reflasher/agent).
+    const { stdout } = await execAsync(`${this.agentPath} -version`)
     return stdout.trim()
   }
 
@@ -195,13 +197,13 @@ class AgentManager extends EventEmitter {
   async downloadAgent(progress?: (progress: Partial<Progress>) => void) {
     const latestVersion = await this.getLatestVersion()
 
-    const agentDownloadURL = `https://storage.googleapis.com/re-agent/${this.os}/${this.architecture}/${latestVersion}/${this.binaryName}`
+    const agentDownloadURL = `https://instance-registry.ironflock.com/dl/re-agent/${this.os}/${this.architecture}/${latestVersion}/${this.binaryName}`
 
     if (progress) {
       progress({ averageSpeed: 0, eta: 0, percentage: 0, speed: 0, bytesWritten: 0 })
     }
 
-    this.downloadPromise = downloadFile(agentDownloadURL, this.agentPath, progress, { mode: 755 })
+    this.downloadPromise = downloadFile(agentDownloadURL, this.agentPath, progress, { mode: 0o755 })
 
     return this.downloadPromise
   }

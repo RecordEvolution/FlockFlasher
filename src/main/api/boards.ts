@@ -9,7 +9,7 @@ import { calculateETA, calculateSpeed, downloadFile } from '../utils'
 
 const CONFIG_PATH = '.Reflasher'
 const AVAILABLE_IMAGES = 'supportedBoardsImages.json'
-const BUCKET_URL = 'https://storage.googleapis.com/reswarmos/'
+const BUCKET_URL = 'https://instance-registry.ironflock.com/dl/reswarmos/'
 export const REFLASHER_CONFIG_PATH = path.join(homedir(), CONFIG_PATH)
 
 export default class ImageManager {
@@ -113,7 +113,9 @@ export default class ImageManager {
     zipTransform.pipe(writeStream)
 
     let written = 0
-    let startTime: number | null = null
+    // Set once at the start: `written` is cumulative, so elapsed time must be measured
+    // from the beginning of the whole decompression, not reset on every chunk.
+    const startTime = Date.now()
 
     if (progress) {
       progress({ averageSpeed: 0, eta: 0, percentage: 0, speed: 0, bytesWritten: 0 })
@@ -121,15 +123,13 @@ export default class ImageManager {
 
     return new Promise((resolve, reject) => {
       readStream.on('data', (buf) => {
-        startTime = Date.now()
-
         zipTransform.write(buf, (err) => {
           if (err) {
             reject(err)
           }
           if (progress) {
             written += buf.length
-            const elapsedTime = (Date.now() - startTime!) / 1000 // Convert to seconds
+            const elapsedTime = (Date.now() - startTime) / 1000 // Convert to seconds
             const { speed, averageSpeed } = calculateSpeed(written, elapsedTime)
             const eta = calculateETA(written, speed, image.size)
             const percentage = (written / image.size) * 100

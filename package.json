@@ -49,7 +49,6 @@
     "pretty-bytes": "^6.1.1",
     "roboto-fontface": "^0.10.0",
     "semver": "^7.5.4",
-    "sudo-prompt": "^9.2.1",
     "terminate": "^2.6.1",
     "uuid": "^9.0.1",
     "vue-composable": "^1.0.0-beta.24",

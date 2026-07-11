@@ -2,12 +2,20 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
   <dict>
+    <!-- Required by Electron/V8's JIT. -->
     <key>com.apple.security.cs.allow-jit</key>
     <true/>
     <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
     <true/>
-    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
-    <true/>
+    <!--
+      allow-dyld-environment-variables was removed: it let DYLD_* be injected into
+      the (sudo-run) process and nothing here relies on it (flashing uses
+      ELECTRON_RUN_AS_NODE, which is not a dyld variable).
+      disable-library-validation is kept only because the bundled native modules
+      (etcher-sdk/drivelist/mountutils) load unsigned .node libraries; it should be
+      dropped once those are signed with the app's team id. Removing either requires
+      a notarized-build smoke test.
+    -->
     <key>com.apple.security.cs.disable-library-validation</key>
     <true/>
   </dict>

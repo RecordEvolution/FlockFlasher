@@ -41,17 +41,32 @@ export default class ImageManager {
     let file = ''
     return new Promise((resolve, reject) => {
       https
-        .get(BUCKET_URL + AVAILABLE_IMAGES, (req) => {
-          req.on('data', (d) => {
+        .get(BUCKET_URL + AVAILABLE_IMAGES, (res) => {
+          const status = res.statusCode ?? 0
+          if (status < 200 || status >= 300) {
+            res.resume()
+            return reject(new Error(`Failed to fetch supported boards: HTTP ${status}`))
+          }
+          res.on('data', (d) => {
             file = file + d.toString()
           })
-          req.on('error', (err) => reject(err))
+          res.on('error', (err) => reject(err))
+          res.on('end', () => {
+            // Guard JSON.parse so a malformed/HTML error body rejects instead of
+            // throwing synchronously inside the event handler.
+            try {
+              const parsed = JSON.parse(file)
+              if (!parsed || !Array.isArray(parsed.boards)) {
+                return reject(new Error('Malformed supported-boards response'))
+              }
+              resolve(parsed.boards)
+            } catch (err) {
+              reject(err)
+            }
+          })
         })
         .on('error', (err) => {
           reject(err)
-        })
-        .on('close', () => {
-          resolve(JSON.parse(file).boards)
         })
     })
   }
@@ -106,12 +121,6 @@ export default class ImageManager {
 
     const targetPath = sourcePath.slice(0, -3)
 
-    const readStream = createReadStream(sourcePath)
-    const writeStream = createWriteStream(targetPath)
-    const zipTransform = createGunzip()
-
-    zipTransform.pipe(writeStream)
-
     let written = 0
     // Set once at the start: `written` is cumulative, so elapsed time must be measured
     // from the beginning of the whole decompression, not reset on every chunk.
@@ -122,29 +131,38 @@ export default class ImageManager {
     }
 
     return new Promise((resolve, reject) => {
-      readStream.on('data', (buf) => {
-        zipTransform.write(buf, (err) => {
-          if (err) {
-            reject(err)
-          }
-          if (progress) {
-            written += buf.length
-            const elapsedTime = (Date.now() - startTime) / 1000 // Convert to seconds
-            const { speed, averageSpeed } = calculateSpeed(written, elapsedTime)
-            const eta = calculateETA(written, speed, image.size)
-            const percentage = (written / image.size) * 100
-            progress({ percentage, averageSpeed, eta, speed, bytesWritten: written })
-          }
-        })
+      const readStream = createReadStream(sourcePath)
+      const writeStream = createWriteStream(targetPath)
+      const zipTransform = createGunzip()
+
+      // Any stream error (corrupt/truncated gzip, read/write failure) now rejects
+      // instead of throwing an unhandled 'error' event that could crash the process.
+      const onError = (err: Error) => {
+        readStream.destroy()
+        zipTransform.destroy()
+        writeStream.destroy()
+        reject(err)
+      }
+      readStream.on('error', onError)
+      zipTransform.on('error', onError)
+      writeStream.on('error', onError)
+
+      // Count decompressed output bytes so percentage matches image.size (uncompressed).
+      zipTransform.on('data', (chunk: Buffer) => {
+        written += chunk.length
+        if (progress && image.size > 0) {
+          const elapsedTime = (Date.now() - startTime) / 1000
+          const { speed, averageSpeed } = calculateSpeed(written, elapsedTime)
+          const eta = calculateETA(written, speed, image.size)
+          const percentage = (written / image.size) * 100
+          progress({ percentage, averageSpeed, eta, speed, bytesWritten: written })
+        }
       })
 
-      readStream.on('end', () => {
-        zipTransform.end()
-      })
+      // Resolve only once the output is fully flushed to disk.
+      writeStream.on('finish', () => resolve())
 
-      zipTransform.on('end', () => {
-        resolve()
-      })
+      readStream.pipe(zipTransform).pipe(writeStream)
     })
   }
 }

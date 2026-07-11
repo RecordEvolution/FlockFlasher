@@ -5,6 +5,7 @@ import { FlashItem, Progress } from '../../types'
 import { elevatedNodeChildProcess } from './permissions'
 import { FLASH_SCRIPT } from '../security/elevated-scripts'
 import { assertValidReswarmConfig } from '../security/validation'
+import { verifyFileSha256 } from '../security/integrity'
 import { copyFile, rename, unlink, writeFile } from 'fs/promises'
 import ImageManager, { REFLASHER_CONFIG_PATH } from './boards'
 import path from 'path'
@@ -89,11 +90,21 @@ const getReswarmImage = async (
         updateState({ ...progress, type: 'decompressing' })
       })
 
+      // Integrity: verify the decompressed image before it is ever flashed. We
+      // assume ImageInfo.sha256 is the digest of the decompressed image, matching
+      // ImageInfo.size (which is the uncompressed size). If a future backend hashes
+      // the compressed artifact instead, this must move to downloadFile's
+      // expectedSha256 — the flash smoke test will surface the mismatch immediately.
+      if (image.sha256) {
+        updateState({ type: 'configuring' })
+        await verifyFileSha256(realImageTempPath, image.sha256)
+      }
+
       await rename(realImageTempPath, realImagePath)
 
       imagePath = imageManager.getImagePath(image)
     } finally {
-      unlink(zippedImageTempPath)
+      unlink(zippedImageTempPath).catch(() => undefined)
     }
   }
 

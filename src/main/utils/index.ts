@@ -1,4 +1,4 @@
-import { createWriteStream, promises } from 'fs'
+import { createWriteStream } from 'fs'
 import fs from 'fs/promises'
 import https from 'https'
 import { Progress } from '../../types'
@@ -6,6 +6,7 @@ import { is } from '@electron-toolkit/utils'
 import path from 'path'
 import { APPIMAGE_MOUNT_POINT, elevatedSpawn } from '../api/permissions'
 import { calculateSpeed, calculateETA } from './progress'
+import { verifyFileSha256 } from '../security/integrity'
 
 // Pure progress math lives in ./progress so it can be unit-tested without Electron.
 export { calculateSpeed, calculateETA } from './progress'
@@ -14,13 +15,20 @@ export const getRemoteFileSize = (url: string): Promise<number> => {
   return new Promise((res, rej) => {
     const request = https.request(url, { method: 'HEAD' }, (result) => {
       result.on('error', rej)
-      result.on('data', console.log)
+      result.resume() // drain any body so the socket can close
       result.on('end', () => {
-        if (result.statusCode !== 200) return rej(new Error('failed to get file'))
-        res(parseInt(result?.headers?.['content-length'] ?? '0'))
+        const status = result.statusCode ?? 0
+        // Follow one redirect for the HEAD probe (the GET follows them too).
+        if (status >= 300 && status < 400 && result.headers.location) {
+          const next = new URL(result.headers.location, url).toString()
+          return getRemoteFileSize(next).then(res, rej)
+        }
+        if (status < 200 || status >= 300) return rej(new Error(`HEAD failed: HTTP ${status}`))
+        res(parseInt(result.headers['content-length'] ?? '0', 10) || 0)
       })
     })
 
+    request.on('error', rej) // the request itself had no error handler before
     request.end()
   })
 }
@@ -58,62 +66,106 @@ export const killProcessDarwin = (signal: number, pid: number) => {
   return elevatedSpawn('kill', [`-${signal}`, String(pid)])
 }
 
+type DownloadOptions = {
+  mode?: number | undefined
+  // Verify the downloaded bytes against this SHA-256 hex digest before committing.
+  expectedSha256?: string
+}
+
+// Download over HTTPS to a temporary `.part` file, then atomically rename into
+// place. Rejects on non-2xx status, on network/stream errors, on a truncated
+// transfer (bytes != content-length), and on a SHA-256 mismatch — and never leaves
+// a partial file at the final path. Redirects are followed (bounded).
 export const downloadFile = async (
   url: string,
-  path: string,
+  destPath: string,
   progress?: (progress: Partial<Progress>) => void,
-  options?: {
-    flags?: string | undefined
-    encoding?: BufferEncoding | undefined
-    fd?: number | promises.FileHandle | undefined
-    mode?: number | undefined
-    autoClose?: boolean | undefined
-    emitClose?: boolean | undefined
-    start?: number | undefined
-    highWaterMark?: number | undefined
-  }
+  options?: DownloadOptions
 ): Promise<void> => {
-  const writeStream = createWriteStream(path, options)
+  const tempPath = `${destPath}.part`
+  const writeStream = createWriteStream(tempPath, { mode: options?.mode })
 
   let written = 0
-  let startTime: number | null = null
+  const startTime = Date.now()
 
   if (progress) {
     progress({ averageSpeed: 0, eta: 0, percentage: 0, speed: 0, bytesWritten: 0 })
   }
 
-  const size = await getRemoteFileSize(url)
+  const size = await getRemoteFileSize(url).catch(() => 0)
 
-  return new Promise((resolve, reject) => {
-    https
-      .get(url, (res) => {
-        startTime = Date.now()
+  const cleanupPartial = async () => {
+    writeStream.destroy()
+    await fs.unlink(tempPath).catch(() => undefined)
+  }
 
-        res.on('data', (buf) => {
-          writeStream.write(buf, (err) => {
-            if (err) {
-              reject(err)
-            }
+  await new Promise<void>((resolve, reject) => {
+    const fail = (err: unknown) => {
+      cleanupPartial().finally(() => reject(err))
+    }
+
+    const request = (currentUrl: string, redirectsLeft: number) => {
+      https
+        .get(currentUrl, (res) => {
+          const status = res.statusCode ?? 0
+
+          // Follow redirects to a bounded depth.
+          if (status >= 300 && status < 400 && res.headers.location) {
+            res.resume() // drain
+            if (redirectsLeft <= 0) return fail(new Error('Too many redirects'))
+            const next = new URL(res.headers.location, currentUrl).toString()
+            return request(next, redirectsLeft - 1)
+          }
+
+          if (status < 200 || status >= 300) {
+            res.resume()
+            return fail(new Error(`Download failed: HTTP ${status} for ${currentUrl}`))
+          }
+
+          res.on('error', fail)
+
+          res.on('data', (buf) => {
+            const ok = writeStream.write(buf, (err) => {
+              if (err) fail(err)
+            })
+            written += buf.length
             if (progress) {
-              written += buf.length
-              const elapsedTime = (Date.now() - startTime!) / 1000 // Convert to seconds
+              const elapsedTime = (Date.now() - startTime) / 1000
               const { speed, averageSpeed } = calculateSpeed(written, elapsedTime)
               const eta = calculateETA(written, speed, size)
-              const percentage = (written / size) * 100
+              const percentage = size > 0 ? (written / size) * 100 : 0
               progress({ percentage, averageSpeed, eta, speed, bytesWritten: written })
             }
+            if (!ok) res.pause()
           })
-        })
 
-        res.on('end', () => {
-          writeStream.end(() => {
-            writeStream.close()
+          writeStream.on('drain', () => res.resume())
+
+          res.on('end', () => {
+            writeStream.end(() => resolve())
           })
         })
-      })
-      .on('error', reject)
-      .on('close', () => {
-        resolve(undefined)
-      })
+        .on('error', fail)
+    }
+
+    writeStream.on('error', fail)
+    request(url, 5)
   })
+
+  // Detect truncated downloads when the server told us the size.
+  if (size > 0 && written !== size) {
+    await cleanupPartial()
+    throw new Error(`Incomplete download: expected ${size} bytes, got ${written}`)
+  }
+
+  if (options?.expectedSha256) {
+    try {
+      await verifyFileSha256(tempPath, options.expectedSha256)
+    } catch (err) {
+      await cleanupPartial()
+      throw err
+    }
+  }
+
+  await fs.rename(tempPath, destPath)
 }

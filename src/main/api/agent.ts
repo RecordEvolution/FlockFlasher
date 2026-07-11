@@ -37,13 +37,17 @@ class AgentManager extends EventEmitter {
   }
 
   private async getLatestVersion() {
-    const res = (await fetch(this.availableVersionsURL).then((res) => res.json())) as {
-      production: string
+    const response = await fetch(this.availableVersionsURL)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch agent versions: HTTP ${response.status}`)
     }
 
-    const { production: latestVersion } = res
+    const res = (await response.json()) as { production?: string }
+    if (!res || typeof res.production !== 'string') {
+      throw new Error('Malformed agent versions response')
+    }
 
-    return latestVersion
+    return res.production
   }
 
   async createAgentDirIfNotExists() {

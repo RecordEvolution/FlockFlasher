@@ -329,25 +329,32 @@ const extractISOContentsMac = async (
   const { stdout } = await elevatedSpawn('hdiutil', ['attach', '-nomount', absoluteISOPath])
   const attachedDisk = stdout.split('\n')[0].split('\t')[0].trim()
 
-  await elevatedSpawn('mount', ['-t', 'cd9660', attachedDisk, srcPath])
+  let progressInterval: NodeJS.Timeout | undefined
+  try {
+    await elevatedSpawn('mount', ['-t', 'cd9660', attachedDisk, srcPath])
 
-  const src = await getFolderSize(srcPath)
-  const progressInterval = setInterval(async () => {
-    const dest = await getFolderSize(destPath)
-    const progressPercent = Math.min((dest / src) * 100, 100)
-    if (onProgress) {
-      onProgress(progressPercent)
-    }
-  }, 1000)
+    const src = await getFolderSize(srcPath)
+    progressInterval = setInterval(async () => {
+      const dest = await getFolderSize(destPath)
+      const progressPercent = Math.min((dest / src) * 100, 100)
+      if (onProgress) {
+        onProgress(progressPercent)
+      }
+    }, 1000)
 
-  await spawnAsync('rsync', ['-az', `${srcPath}/`, `${destPath}/`]).catch((err) => err)
-  clearInterval(progressInterval)
+    // Do NOT swallow rsync failures — a partial copy would flash a corrupt image.
+    await spawnAsync('rsync', ['-az', `${srcPath}/`, `${destPath}/`])
+    clearInterval(progressInterval)
+    progressInterval = undefined
 
-  await elevatedSpawn('umount', [srcPath])
-
-  await elevatedSpawn('hdiutil', ['detach', attachedDisk])
-
-  await elevatedSpawn('chmod', ['-R', '777', destPath])
+    await elevatedSpawn('chmod', ['-R', '777', destPath])
+  } finally {
+    // Always release the interval and unmount/detach the source ISO, even on failure,
+    // so a thrown error can't leak an attached disk image.
+    if (progressInterval) clearInterval(progressInterval)
+    await elevatedSpawn('umount', [srcPath]).catch(() => undefined)
+    await elevatedSpawn('hdiutil', ['detach', attachedDisk]).catch(() => undefined)
+  }
 
   return attachedDisk
 }

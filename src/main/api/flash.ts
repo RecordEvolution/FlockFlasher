@@ -20,7 +20,7 @@ import {
 
 const activeFlashProcesses = new Map<number, ChildProcess>()
 export const imageManager = new ImageManager()
-imageManager.createReflasherDirIfNotExists()
+imageManager.createReflasherDirIfNotExists().catch(console.error)
 
 const copyConfigFile = async (drive: Drive, reswarmConfigPath: string) => {
   // For some reason linux doesn't automount the drive, so we have to manually do it
@@ -104,7 +104,9 @@ const getReswarmImage = async (
 
       imagePath = imageManager.getImagePath(image)
     } finally {
-      unlink(zippedImageTempPath).catch(() => undefined)
+      // Clean up both temp artifacts. The decompressed temp is normally consumed by
+      // the rename above, but if download/decompress/verify threw it can be left behind.
+      await Promise.allSettled([unlink(zippedImageTempPath), unlink(realImageTempPath)])
     }
   }
 
@@ -164,18 +166,25 @@ export const flashDevice = async (
 
     // Copy the file over when the flashing process has exited without an error code
     if (code === 0 && signal === null && flashItem.reswarm) {
-      if (image?.osvariant === 'image') {
-        try {
-          await copyConfigFile(flashItem.drive!, flashItem.fullPath)
-        } catch (error) {
-          if (process.platform !== 'win32') throw error
+      try {
+        if (image?.osvariant === 'image') {
+          try {
+            await copyConfigFile(flashItem.drive!, flashItem.fullPath)
+          } catch (error) {
+            if (process.platform !== 'win32') throw error
 
-          // For some reason, the first time this fails on windows, doing it again works.
-          await copyConfigFile(flashItem.drive!, flashItem.fullPath)
+            // For some reason, the first time this fails on windows, doing it again works.
+            await copyConfigFile(flashItem.drive!, flashItem.fullPath)
+          }
         }
-      }
 
-      updateState({ type: 'finished' })
+        updateState({ type: 'finished' })
+      } catch (error) {
+        // This runs as an (unawaited) child-process exit callback, so a throw here
+        // would become an unhandled rejection. Report it through the UI instead.
+        console.error('Post-flash config copy failed:', error)
+        updateState({ type: 'failed' })
+      }
     }
   }
 
@@ -203,7 +212,11 @@ export const cancelFlashing = async (id: number) => {
   const flashProcess = activeFlashProcesses.get(id)
   if (flashProcess && flashProcess.pid) {
     if (process.platform === 'darwin') {
-      killProcessDarwin(15, flashProcess.pid) // SIGTERM
+      // Elevated kill returns a promise; await + surface failures instead of letting
+      // it float as an unhandled rejection.
+      await killProcessDarwin(15, flashProcess.pid).catch((err) =>
+        console.error('Failed to cancel flashing:', err)
+      )
     } else {
       flashProcess.kill('SIGTERM')
     }

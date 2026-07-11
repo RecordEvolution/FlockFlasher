@@ -33,7 +33,9 @@ class AgentManager extends EventEmitter {
 
   constructor() {
     super()
-    this.init()
+    // init() does network I/O and a download; without a catch a failure here would
+    // surface as an unhandled promise rejection at module load.
+    this.init().catch((err) => console.error('Agent initialization failed:', err))
   }
 
   private async getLatestVersion() {

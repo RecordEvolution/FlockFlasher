@@ -9,6 +9,8 @@ import { buildSudoArgs } from '../security/args'
 
 export const APPIMAGE_MOUNT_POINT = path.join(tmpdir(), 'ReflasherAppImage')
 
+const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
 let sudoPassword = ''
 let sudoPasswordSet = false
 
@@ -216,16 +218,21 @@ export const mountAppImage = async () => {
 
   const command = path.join(APPIMAGE_MOUNT_POINT, executableName)
 
-  let doesFileExist = false
-  while (!doesFileExist) {
+  // Poll for the mounted executable with a delay and an overall timeout, instead of
+  // a tight busy-loop that pegs a CPU core and can hang forever if the mount fails.
+  const timeoutMs = 15000
+  const intervalMs = 100
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
     try {
-      doesFileExist = await fileExists(command)
+      if (await fileExists(command)) return true
     } catch (error) {
       console.error(error)
     }
+    await delay(intervalMs)
   }
 
-  return doesFileExist
+  throw new Error('Timed out waiting for the AppImage to mount')
 }
 
 export const cleanupAppImageIfExists = async () => {

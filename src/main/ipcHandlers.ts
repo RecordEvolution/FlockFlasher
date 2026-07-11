@@ -156,7 +156,7 @@ async function handleTestDevice(flashItem: FlashItem) {
 }
 
 function handleStopDevice() {
-  agentManager.stopAgent()
+  return agentManager.stopAgent()
 }
 
 async function handleHasDocker() {

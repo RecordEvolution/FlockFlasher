@@ -160,18 +160,18 @@ export const automountDriveLinux = async (drive: Drive) => {
   }
 }
 
-export const waitForMount = async (description: string) => {
-  while (true) {
+export const waitForMount = async (description: string, timeoutMs = 60000) => {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
     const drives = await listdrives()
-    console.log(drives)
     const drive = drives.filter((d) => d.isRemovable && d.description === description)
-    if (drive.length === 1) {
-      if (drive[0].mountpoints.length !== 0) {
-        return drive[0]
-      }
+    if (drive.length === 1 && drive[0].mountpoints.length !== 0) {
+      return drive[0]
     }
     await wait(1000)
   }
+  // Previously this looped forever; if automount silently failed the flash would hang.
+  throw new Error(`Timed out waiting for drive "${description}" to mount`)
 }
 
 export async function unmountDisk(drivePath: string) {

@@ -5,6 +5,7 @@ import path from 'path'
 import { v4 as uuidv4 } from 'uuid'
 import { fileExists } from '../utils'
 import { is } from '@electron-toolkit/utils'
+import { buildSudoArgs } from '../security/args'
 
 export const APPIMAGE_MOUNT_POINT = path.join(tmpdir(), 'ReflasherAppImage')
 
@@ -30,7 +31,7 @@ export const setSudoPassword = async (password: string) => {
 export const isSudoPasswordSet = async (): Promise<boolean> => {
   if (!sudoPassword) return false
   try {
-    await elevatedExecUnix('ls')
+    await elevatedSpawn('ls')
     return true
   } catch (error) {
     return false
@@ -44,6 +45,7 @@ export const getSudoPassword = () => {
 
 export const elevatedNodeChildProcess = (
   code: string,
+  scriptArgs: string[] = [],
   onStdout?: (data: string) => void,
   onStderr?: (data: string) => void,
   onExit?: (code: number | null, signal: NodeJS.Signals | null) => void,
@@ -51,11 +53,11 @@ export const elevatedNodeChildProcess = (
 ) => {
   const platform = process.platform
   if (platform === 'darwin' || platform === 'linux') {
-    return elevatedNodeChildProcessUnix(code, onStdout, onStderr, onExit, options)
+    return elevatedNodeChildProcessUnix(code, scriptArgs, onStdout, onStderr, onExit, options)
   }
 
   // No need to elevate the child process in Windows as the Windows app will run in elevated mode anyways
-  return nodeChildProcessWindows(code, onStdout, onStderr, onExit, options)
+  return nodeChildProcessWindows(code, scriptArgs, onStdout, onStderr, onExit, options)
 }
 
 export const execAsync = async (
@@ -76,42 +78,56 @@ export const execAsync = async (
   })
 }
 
-export const elevatedExec = async (command: string) => {
-  if (process.platform === 'darwin' || process.platform === 'linux') {
-    return elevatedExecUnix(command)
-  }
-
-  // No need to elevate the exec process in Windows as the Windows app will run in elevated mode anyways
-  return execAsync(command)
+export type SpawnResult = {
+  stdout: string
+  stderr: string
+  code: number | null
+  signal: NodeJS.Signals | null
 }
 
-export const elevatedExecUnix = async (
-  command: string
-): Promise<{ stdout: string; stderr: string; code: number | null; signal: string | null }> => {
+// Run a command with an explicit argv array and no shell. This is the safe
+// replacement for the old string-based elevatedExec/elevatedExecUnix.
+export const elevatedSpawn = async (command: string, args: string[] = []): Promise<SpawnResult> => {
+  // On Windows the app already runs elevated, so no sudo wrapper is needed.
+  if (process.platform === 'win32') {
+    return spawnAsync(command, args)
+  }
+  return spawnAsync('sudo', buildSudoArgs(command, args), getSudoPassword())
+}
+
+// Non-shell spawn returning collected stdout/stderr. `stdin`, if provided, is
+// written and the stream closed (used to feed the sudo password).
+export const spawnAsync = async (
+  command: string,
+  args: string[] = [],
+  stdin?: string,
+  options?: SpawnOptionsWithoutStdio
+): Promise<SpawnResult> => {
   return new Promise((res, rej) => {
     const stdoutData: string[] = []
     const stderrData: string[] = []
-    let error: Error
+    let error: Error | undefined
 
-    const args = ['-E', '-S', ...command.split(' ')]
-    const childProcess = spawn('sudo', args)
+    const childProcess = spawn(command, args, options)
     activeProcesses.push(childProcess)
 
-    childProcess.stdin.write(getSudoPassword())
-    childProcess.stdin.end()
+    if (stdin !== undefined) {
+      childProcess.stdin.write(stdin)
+      childProcess.stdin.end()
+    }
 
     childProcess.stdout.on('data', (data) => stdoutData.push(data.toString()))
-
     childProcess.stderr.on('data', (data) => stderrData.push(data.toString()))
-
     childProcess.on('error', (err) => {
       error = err
     })
 
     childProcess.on('exit', (code, signal) => {
-      activeProcesses.splice(activeProcesses.indexOf(childProcess), 1)
-      if (code != null && code !== 0) {
-        return rej({ error, code, signal })
+      const idx = activeProcesses.indexOf(childProcess)
+      if (idx !== -1) activeProcesses.splice(idx, 1)
+
+      if (error || (code != null && code !== 0)) {
+        return rej({ error, code, signal, stdout: stdoutData.join(''), stderr: stderrData.join('') })
       }
 
       res({ stdout: stdoutData.join(''), stderr: stderrData.join(''), code, signal })
@@ -121,6 +137,7 @@ export const elevatedExecUnix = async (
 
 const elevatedNodeChildProcessUnix = async (
   code: string,
+  scriptArgs: string[] = [],
   onStdout?: (data: string) => void,
   onStderr?: (data: string) => void,
   onExit?: (code: number | null, signal: NodeJS.Signals | null) => void,
@@ -142,11 +159,15 @@ const elevatedNodeChildProcessUnix = async (
     command = path.join(APPIMAGE_MOUNT_POINT, executableName)
   }
 
-  await fs.writeFile(scriptPath, code)
+  // Script is written with owner-only permissions since it is executed as root.
+  await fs.writeFile(scriptPath, code, { mode: 0o700 })
 
   return childProcess(
     command,
-    [scriptPath],
+    // Untrusted data (image path, drive JSON, device path) is passed as argv to
+    // the script, never interpolated into its source. The script reads it via
+    // process.argv, so metacharacters can't become code.
+    [scriptPath, ...scriptArgs],
     onStdout,
     onStderr,
     (code, signal) => {
@@ -175,18 +196,20 @@ export const mountAppImage = async () => {
     throw new Error('AppImage mount called, but environment variable not set')
   }
 
-  const { stdout } = await execAsync(`${process.env.APPIMAGE} --appimage-offset`, {
-    encoding: 'utf8',
-    env: { APPIMAGELAUNCHER_DISABLE: '1' }
+  const { stdout } = await spawnAsync(process.env.APPIMAGE, ['--appimage-offset'], undefined, {
+    env: { ...process.env, APPIMAGELAUNCHER_DISABLE: '1' }
   })
 
   const appImageOffset = stdout.trim()
 
   await fs.mkdir(APPIMAGE_MOUNT_POINT, { recursive: true })
 
-  await elevatedExec(
-    `mount -o loop,ro,offset=${appImageOffset} ${process.env.APPIMAGE} ${APPIMAGE_MOUNT_POINT}`
-  )
+  await elevatedSpawn('mount', [
+    '-o',
+    `loop,ro,offset=${appImageOffset}`,
+    process.env.APPIMAGE,
+    APPIMAGE_MOUNT_POINT
+  ])
 
   const executableName = is.dev ? 'reflasher' : process.execPath.split('/').pop()
   if (!executableName) throw new Error('executable name in execPath is undefined')
@@ -210,7 +233,7 @@ export const cleanupAppImageIfExists = async () => {
   if (!appImageMountPointExists) return
 
   try {
-    await elevatedExec(`umount ${APPIMAGE_MOUNT_POINT}`)
+    await elevatedSpawn('umount', [APPIMAGE_MOUNT_POINT])
   } catch (error) {
     console.log('failed to unmount AppImage path:', error)
   }
@@ -230,7 +253,7 @@ export const childProcess = (
   let finalArgs = args
   if (options?.elevated && sudoSupportedOS) {
     finalCommand = 'sudo'
-    finalArgs = ['-E', '-S', command, ...args]
+    finalArgs = buildSudoArgs(command, args)
   }
 
   const { elevated, ...optionsWithoutElevated } = options ?? {}
@@ -265,6 +288,7 @@ export const childProcess = (
 
 const nodeChildProcessWindows = async (
   code: string,
+  scriptArgs: string[] = [],
   onStdout?: (data: string) => void,
   onStderr?: (data: string) => void,
   onExit?: (code: number | null, signal: NodeJS.Signals | null) => void,
@@ -274,10 +298,10 @@ const nodeChildProcessWindows = async (
   const fileName = uniqueID + '.js'
   const scriptPath = path.join(is.dev ? process.resourcesPath : tmpdir(), fileName)
 
-  await fs.writeFile(scriptPath, code)
+  await fs.writeFile(scriptPath, code, { mode: 0o700 })
 
   const command = process.execPath
-  const args = [scriptPath]
+  const args = [scriptPath, ...scriptArgs]
 
   return childProcess(
     command,

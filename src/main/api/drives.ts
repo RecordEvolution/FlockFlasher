@@ -1,5 +1,6 @@
 import { Drive, list as listdrives } from 'drivelist'
-import { elevatedNodeChildProcess, elevatedExecUnix, execAsync } from './permissions'
+import { elevatedNodeChildProcess, elevatedSpawn, spawnAsync } from './permissions'
+import { UNMOUNT_SCRIPT } from '../security/elevated-scripts'
 import { getNodeModulesResourcePath } from '../utils'
 
 export async function listDrives() {
@@ -110,12 +111,12 @@ export const automountDrive = (drive: Drive) => {
 }
 
 export const listPartitionsDarwin = async (drive: Drive) => {
-  const { stdout } = await execAsync(`diskutil list ${drive.device}`)
+  const { stdout } = await spawnAsync('diskutil', ['list', drive.device])
   return parseDarwinPartitionOutput(stdout)
 }
 
 export const listPartitionsLinux = async (drive: Drive) => {
-  const { stdout } = await elevatedExecUnix(`fdisk -l ${drive.device}`)
+  const { stdout } = await elevatedSpawn('fdisk', ['-l', drive.device])
   return parseUnixPartitionOutput(stdout)
 }
 
@@ -139,7 +140,7 @@ export const automountDriveDarwin = async (drive: Drive) => {
   const partitions = await listPartitionsDarwin(drive)
   for (const partition of partitions) {
     try {
-      await execAsync(`diskutil mount /dev/${partition.identifier}`)
+      await spawnAsync('diskutil', ['mount', `/dev/${partition.identifier}`])
     } catch (error) {
       console.error('failed to mount:', partition.identifier, error)
     }
@@ -148,11 +149,11 @@ export const automountDriveDarwin = async (drive: Drive) => {
 
 export const automountDriveLinux = async (drive: Drive) => {
   const partitions = await listPartitionsLinux(drive)
-  await execAsync('udevadm settle')
+  await spawnAsync('udevadm', ['settle'])
 
   for (const partition of partitions) {
     try {
-      await execAsync(`udisksctl mount -b ${partition.device}`)
+      await spawnAsync('udisksctl', ['mount', '-b', partition.device])
     } catch (error) {
       console.error('failed to mount:', partition.device, error)
     }
@@ -174,24 +175,10 @@ export const waitForMount = async (description: string) => {
 }
 
 export async function unmountDisk(drivePath: string) {
-  let actualDrivePath = drivePath
-  if (process.platform === 'win32') {
-    actualDrivePath = actualDrivePath.replace(/\\/g, '\\\\')
-  }
-
   const mountutilsRequire = getNodeModulesResourcePath('mountutils')
-  const scriptContent = `
-    const mountutils = require('${mountutilsRequire}');
 
-    mountutils.unmountDisk("${actualDrivePath}", (err) => {
-      if (err) {
-        process.stderr.write(err.message);
-        process.exit(1);
-      }
-
-      process.exit(0);
-    });
-  `
-
-  return elevatedNodeChildProcess(scriptContent)
+  // The drive path and the module path are passed to the elevated script as argv,
+  // never interpolated into its source, so they can't inject code. The Windows
+  // backslash-escaping hack is gone with the string interpolation it worked around.
+  return elevatedNodeChildProcess(UNMOUNT_SCRIPT, [drivePath, mountutilsRequire])
 }

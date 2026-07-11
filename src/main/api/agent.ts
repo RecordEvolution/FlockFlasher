@@ -2,7 +2,7 @@ import path from 'path'
 import { FlashItem, Progress } from '../../types'
 import { downloadFile } from '../utils'
 import { REFLASHER_CONFIG_PATH } from './boards'
-import { childProcess, execAsync } from './permissions'
+import { childProcess, execAsync, spawnAsync } from './permissions'
 import fs, { access, mkdir } from 'fs/promises'
 import { ChildProcessWithoutNullStreams } from 'child_process'
 import { EventEmitter } from 'stream'
@@ -80,7 +80,8 @@ class AgentManager extends EventEmitter {
   async getAgentVersion() {
     // Use the absolute agentPath, not the bare binary name (which relies on PATH
     // and would never resolve to the downloaded binary in ~/.Reflasher/agent).
-    const { stdout } = await execAsync(`${this.agentPath} -version`)
+    // spawnAsync (no shell) keeps this working when the home dir contains spaces.
+    const { stdout } = await spawnAsync(this.agentPath, ['-version'])
     return stdout.trim()
   }
 
@@ -99,7 +100,7 @@ class AgentManager extends EventEmitter {
 
   async shouldDownloadAgent() {
     try {
-      const { stdout } = await execAsync(`${this.agentPath} -version`)
+      const { stdout } = await spawnAsync(this.agentPath, ['-version'])
       const currentVersion = stdout.trim()
 
       const latestVersion = await this.getLatestVersion()

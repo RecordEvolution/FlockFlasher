@@ -5,7 +5,7 @@ import path from 'path'
 import { resourcesPath } from 'process'
 import { is } from '@electron-toolkit/utils'
 import { app } from 'electron'
-import { childProcess, elevatedExec, execAsync } from './permissions'
+import { childProcess, elevatedSpawn, spawnAsync } from './permissions'
 
 const unsupportedBinariesMac = ['xorriso']
 
@@ -35,13 +35,17 @@ export const resolveBinaryPath = (command: string) => {
 }
 
 const getFolderSize = async (folderPath: string) => {
-  const commands = {
-    win32: `${resolveBinaryPath('du')} -nobanner -accepteula -q -c ${folderPath}`,
-    darwin: `du -sk ${folderPath}`,
-    linux: `du -sb ${folderPath}`
+  const commands: Record<string, { cmd: string; args: string[] }> = {
+    win32: {
+      cmd: resolveBinaryPath('du'),
+      args: ['-nobanner', '-accepteula', '-q', '-c', folderPath]
+    },
+    darwin: { cmd: 'du', args: ['-sk', folderPath] },
+    linux: { cmd: 'du', args: ['-sb', folderPath] }
   }
 
-  const { stdout } = await elevatedExec(commands[process.platform])
+  const { cmd, args } = commands[process.platform]
+  const { stdout } = await elevatedSpawn(cmd, args)
   switch (process.platform) {
     case 'win32': {
       const stats = stdout.split('\n')[1].split(',')
@@ -65,11 +69,11 @@ const getFolderSize = async (folderPath: string) => {
 
 const unmountISOLinux = async (deviceId: string) => {
   const mountedPath = getISOMountPath(deviceId)
-  return elevatedExec(`umount ${mountedPath}`)
+  return elevatedSpawn('umount', [mountedPath])
 }
 
 const unmountISOMac = async (attachedDisk: string) => {
-  return elevatedExec(`hdiutil detach ${attachedDisk}`)
+  return elevatedSpawn('hdiutil', ['detach', attachedDisk])
 }
 
 const remove = (path) => {
@@ -134,9 +138,12 @@ const rebuildISOFromContents = async (
   }
 
   const xorrisoPath = resolveBinaryPath('xorriso')
-  const { stdout } = await elevatedExec(
-    `${xorrisoPath} -indev ${originalISOPath} -report_el_torito as_mkisofs`
-  )
+  const { stdout } = await elevatedSpawn(xorrisoPath, [
+    '-indev',
+    originalISOPath,
+    '-report_el_torito',
+    'as_mkisofs'
+  ])
 
   const contentsPath = getISOContentsPath(deviceId)
   const tempMetaDataPath = getTempDataPath(deviceId)
@@ -162,9 +169,13 @@ const rebuildISOFromContents = async (
 
   // Extract boot partition from ISO
   const ddPath = resolveBinaryPath('dd')
-  await elevatedExec(
-    `${ddPath} if=${originalISOPath} bs=${blockSize} skip=${skipBlock} count=${blockCount} of=${bootPartitionImagePath}`
-  )
+  await elevatedSpawn(ddPath, [
+    `if=${originalISOPath}`,
+    `bs=${blockSize}`,
+    `skip=${skipBlock}`,
+    `count=${blockCount}`,
+    `of=${bootPartitionImagePath}`
+  ])
 
   let newISOPathSplit = originalISOPath.split('.')
   newISOPathSplit.pop()
@@ -308,10 +319,10 @@ const extractISOContentsMac = async (
   await fsExtra.mkdirp(srcPath)
   await fsExtra.mkdirp(destPath)
 
-  const { stdout } = await elevatedExec(`hdiutil attach -nomount ${absoluteISOPath}`)
+  const { stdout } = await elevatedSpawn('hdiutil', ['attach', '-nomount', absoluteISOPath])
   const attachedDisk = stdout.split('\n')[0].split('\t')[0].trim()
 
-  await elevatedExec(`mount -t cd9660 ${attachedDisk} ${srcPath}`)
+  await elevatedSpawn('mount', ['-t', 'cd9660', attachedDisk, srcPath])
 
   const src = await getFolderSize(srcPath)
   const progressInterval = setInterval(async () => {
@@ -322,14 +333,14 @@ const extractISOContentsMac = async (
     }
   }, 1000)
 
-  await execAsync(`rsync -az ${srcPath}/ ${destPath}/`).catch((err) => err)
+  await spawnAsync('rsync', ['-az', `${srcPath}/`, `${destPath}/`]).catch((err) => err)
   clearInterval(progressInterval)
 
-  await elevatedExec(`umount ${srcPath}`)
+  await elevatedSpawn('umount', [srcPath])
 
-  await elevatedExec(`hdiutil detach ${attachedDisk}`)
+  await elevatedSpawn('hdiutil', ['detach', attachedDisk])
 
-  await elevatedExec(`chmod -R 777 ${destPath}`)
+  await elevatedSpawn('chmod', ['-R', '777', destPath])
 
   return attachedDisk
 }
@@ -348,7 +359,7 @@ const extractISOContentsLinux = async (
 
   await fsExtra.mkdirp(srcPath)
   await fsExtra.mkdirp(destPath)
-  await elevatedExec(`mount ${absoluteISOPath} ${srcPath}`)
+  await elevatedSpawn('mount', [absoluteISOPath, srcPath])
 
   if (onProgress) {
     onProgress(0)
@@ -376,9 +387,9 @@ const extractISOContentsLinux = async (
     )
   })
 
-  await elevatedExec(`umount ${srcPath}`)
+  await elevatedSpawn('umount', [srcPath])
 
-  await elevatedExec(`chmod -R 777 ${destPath}`)
+  await elevatedSpawn('chmod', ['-R', '777', destPath])
 
   return null
 }

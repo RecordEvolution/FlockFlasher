@@ -3,6 +3,7 @@ import { getNodeModulesResourcePath, killProcessDarwin } from '../utils'
 import { ChildProcess } from 'child_process'
 import { FlashItem, Progress } from '../../types'
 import { elevatedNodeChildProcess } from './permissions'
+import { FLASH_SCRIPT } from '../security/elevated-scripts'
 import { copyFile, rename, unlink, writeFile } from 'fs/promises'
 import ImageManager, { REFLASHER_CONFIG_PATH } from './boards'
 import path from 'path'
@@ -129,57 +130,15 @@ export const flashDevice = async (
     imagePath = await getReswarmImage(flashItem, updateState)
   }
 
-  let stringifiedDrive = JSON.stringify(flashItem.drive)
-  if (process.platform === 'win32') {
-    imagePath = imagePath.replace(/\\/g, '\\\\')
-    stringifiedDrive = stringifiedDrive.replace(/\\/g, '\\\\')
-  }
-
+  const stringifiedDrive = JSON.stringify(flashItem.drive)
+  const finalType = flashItem.reswarm ? 'configuring' : 'finished'
   const etcherSDKRequire = getNodeModulesResourcePath('etcher-sdk')
-  const scriptContent = `
-    const { sourceDestination, multiWrite } = require('${etcherSDKRequire}')
-    let progressData;
 
-    process.on('SIGTERM', () => {
-      process.stdout.write(\`{"canceled":true, "type": "\${progressData.type}" }\`)
-      process.exit(1)
-    });
-
-    async function flash() {
-      const _imageFile = new sourceDestination.File({
-        path: "${imagePath}"
-      })
-    
-      const drive = JSON.parse('${stringifiedDrive}')
-      const _blockDevice = new sourceDestination.BlockDevice({
-        drive,
-        write: true,
-        unmountOnSuccess: false
-      })
-
-      const source = await _imageFile.getInnerSource()
-
-      await multiWrite.decompressThenFlash({
-        source,
-        destinations: [_blockDevice],
-        onFail: (_, error) => {
-          console.log(error)
-          process.exit(1)
-        },
-        onProgress: (progress) => {
-          progressData = progress
-          process.stdout.write(JSON.stringify(progress))
-        },
-        verify: true
-      })
-      
-      progressData.type = "${flashItem.reswarm ? 'configuring' : 'finished'}"
-      const finalPayload = JSON.stringify(progressData)
-      process.stdout.write(finalPayload)
-    }
-
-    flash()
-  `
+  // FLASH_SCRIPT is a FIXED script body — no untrusted data is interpolated into
+  // it. The image path, drive JSON, final state and etcher-sdk module path are
+  // passed as argv (process.argv[2..5]) and read as data, so a crafted filename /
+  // drive description / serial number can never break out and run as root.
+  const scriptContent = FLASH_SCRIPT
 
   async function handleOnExit(code: number | null, signal: NodeJS.Signals | null) {
     activeFlashProcesses.delete(flashItem.id)
@@ -205,6 +164,7 @@ export const flashDevice = async (
 
   const childProcess = await elevatedNodeChildProcess(
     scriptContent,
+    [imagePath, stringifiedDrive, finalType, etcherSDKRequire],
     (data) => {
       try {
         updateState(JSON.parse(data))

@@ -4,7 +4,7 @@ import https from 'https'
 import { Progress } from '../../types'
 import { is } from '@electron-toolkit/utils'
 import path from 'path'
-import { APPIMAGE_MOUNT_POINT, elevatedExec } from '../api/permissions'
+import { APPIMAGE_MOUNT_POINT, elevatedSpawn } from '../api/permissions'
 import { calculateSpeed, calculateETA } from './progress'
 
 // Pure progress math lives in ./progress so it can be unit-tested without Electron.
@@ -55,7 +55,7 @@ export const fileExists = async (filePath: string) => {
 }
 
 export const killProcessDarwin = (signal: number, pid: number) => {
-  return elevatedExec(`kill -${signal} ${pid}`)
+  return elevatedSpawn('kill', [`-${signal}`, String(pid)])
 }
 
 export const downloadFile = async (

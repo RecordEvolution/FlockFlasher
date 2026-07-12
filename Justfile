@@ -59,7 +59,11 @@ release:
     #!/usr/bin/env bash
     set -euo pipefail
     cd {{ROOT_DIR}}
-    : "${GH_TOKEN:?set GH_TOKEN in your environment to publish to GitHub Releases}"
+    # Load secrets (GH_TOKEN, and on macOS APPLEID/APPLEIDPASS) from .env if present,
+    # matching the project convention (scripts/notarize.js also reads .env via dotenv).
+    # An already-exported GH_TOKEN in the shell still wins if .env doesn't define one.
+    if [ -f .env ]; then set -a; . ./.env; set +a; fi
+    : "${GH_TOKEN:?set GH_TOKEN in .env or your environment to publish to GitHub Releases}"
     npm run build
     npx --no-install electron-builder {{BUILDER_TARGET}} --publish always
 

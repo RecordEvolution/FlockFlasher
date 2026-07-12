@@ -162,6 +162,10 @@ function handleStopDevice() {
   return agentManager.stopAgent()
 }
 
+function handleGetAgentDownloadStatus() {
+  return agentManager.getDownloadStatus()
+}
+
 async function handleHasDocker() {
   return hasDocker()
 }
@@ -207,6 +211,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow) {
   ipcMain.handle(RPC.GetPlatform, handleGetPlatform)
   ipcMain.handle(RPC.TestDevice, (_, flashItem) => handleTestDevice(flashItem))
   ipcMain.handle(RPC.StopDevice, handleStopDevice)
+  ipcMain.handle(RPC.GetAgentDownloadStatus, handleGetAgentDownloadStatus)
   ipcMain.handle(RPC.HasDocker, handleHasDocker)
   ipcMain.handle(RPC.DownloadUpdate, handleDownloadUpdate)
   ipcMain.handle(RPC.InstallUpdate, handleInstallUpdate)

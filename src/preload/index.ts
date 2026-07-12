@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { RPC } from '../types'
-import type { FlashItem, SupportedBoard } from '../types'
+import type { AgentDownloadStatus, FlashItem, SupportedBoard } from '../types'
 import type { Drive } from 'drivelist'
 import type { WiFiNetwork } from 'node-wifi'
 
@@ -37,6 +37,8 @@ const api = {
   scanWifi: () => ipcRenderer.invoke(RPC.ScanWifi) as Promise<WiFiNetwork[]>,
   testDevice: (flashItem: FlashItem) => ipcRenderer.invoke(RPC.TestDevice, flashItem),
   stopDevice: () => ipcRenderer.invoke(RPC.StopDevice),
+  getAgentDownloadStatus: () =>
+    ipcRenderer.invoke(RPC.GetAgentDownloadStatus) as Promise<AgentDownloadStatus>,
   flashDevice: (flashItem: FlashItem) => ipcRenderer.invoke(RPC.FlashDevice, flashItem),
   cancelFlashing: (id: number) => ipcRenderer.invoke(RPC.CancelFlashing, id),
   setSudoPassword: (password: string) => ipcRenderer.invoke(RPC.SetSudoPassword, password),

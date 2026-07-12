@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { FlashItem, Progress } from 'src/types'
+import { AgentDownloadState, FlashItem, Progress } from 'src/types'
 import Convert from 'ansi-to-html'
 import { deepToRaw } from '@renderer/utils'
 
@@ -10,7 +10,7 @@ type AgentStoreState = {
   dockerInitialized: boolean
   _dockerInfoDialog: boolean
   _downloadProgress: Partial<Progress>
-  _downloadState: 'idle' | 'downloading' | 'finished'
+  _downloadState: AgentDownloadState
   initialized: boolean
 }
 // escapeXML HTML-escapes each log line before converting ANSI codes to spans, so
@@ -71,8 +71,21 @@ export const useAgentStore = () => {
 
         window.ipcRenderer.receive('agent-download-progress', ({ state, progress }) => {
           this._downloadState = state
-          this._downloadProgress = progress
+          this._downloadProgress = progress ?? {}
         })
+
+        // The agent download can start at app launch, before this listener was
+        // attached, so pull the current status to seed the UI. Only apply it while
+        // still idle so a live event that already arrived isn't overwritten.
+        window.api
+          .getAgentDownloadStatus()
+          .then((status) => {
+            if (this._downloadState === 'idle') {
+              this._downloadState = status.state
+              this._downloadProgress = status.progress ?? {}
+            }
+          })
+          .catch((err) => console.error('Failed to get agent download status:', err))
 
         this.initialized = true
       }

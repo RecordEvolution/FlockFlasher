@@ -191,11 +191,19 @@ async function main() {
   electronApp.setAppUserModelId('com.recordevolution')
 
   if (is.dev) {
-    await installExtension('nhdogjmejiglipccpnnnanhbledajbpd', {
-      loadExtensionOptions: {
-        allowFileAccess: true
-      }
-    })
+    // Installing Vue devtools downloads a .crx from the Chrome Web Store, which can
+    // fail (e.g. "Invalid header: Does not start with Cr24"). It must never block
+    // startup — a failed devtools install previously rejected main() before
+    // createWindow(), so no window appeared in dev.
+    try {
+      await installExtension('nhdogjmejiglipccpnnnanhbledajbpd', {
+        loadExtensionOptions: {
+          allowFileAccess: true
+        }
+      })
+    } catch (err) {
+      console.warn('Skipping Vue devtools install (continuing without it):', err)
+    }
   }
 
   const window = createWindow()

@@ -118,15 +118,30 @@ export const spawnAsync = async (
       childProcess.stdin.end()
     }
 
+    const removeFromActive = () => {
+      const idx = activeProcesses.indexOf(childProcess)
+      if (idx !== -1) activeProcesses.splice(idx, 1)
+    }
+
     childProcess.stdout.on('data', (data) => stdoutData.push(data.toString()))
     childProcess.stderr.on('data', (data) => stderrData.push(data.toString()))
+
+    // A spawn failure (e.g. ENOENT for a missing binary) emits 'error' but never
+    // 'exit', so the promise must be rejected here or it would hang forever.
     childProcess.on('error', (err) => {
       error = err
+      removeFromActive()
+      rej({
+        error,
+        code: null,
+        signal: null,
+        stdout: stdoutData.join(''),
+        stderr: stderrData.join('')
+      })
     })
 
     childProcess.on('exit', (code, signal) => {
-      const idx = activeProcesses.indexOf(childProcess)
-      if (idx !== -1) activeProcesses.splice(idx, 1)
+      removeFromActive()
 
       if (error || (code != null && code !== 0)) {
         return rej({

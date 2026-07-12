@@ -20,6 +20,7 @@ export enum RPC {
   GetPlatform = 'get-platform',
   TestDevice = 'test-device',
   StopDevice = 'stop-device',
+  GetAgentDownloadStatus = 'get-agent-download-status',
   HasDocker = 'has-docker',
   HasUpdate = 'has-update',
   UpdateStatus = 'update-status',
@@ -113,6 +114,10 @@ export type Progress = {
   percentage: number
   eta: number
 }
+
+// Progress of the background device-agent (reagent) binary download.
+export type AgentDownloadState = 'idle' | 'downloading' | 'finished' | 'failed'
+export type AgentDownloadStatus = { state: AgentDownloadState; progress?: Partial<Progress> }
 
 export type FlashItem = {
   id: number

@@ -98,7 +98,10 @@ export default {
   check_speed_drive: 'Verify the specified speed of your flash drive',
   check_documentation: 'Check the documentation',
   agent: {
-    currently_running: 'Currently running: {name}'
+    currently_running: 'Currently running: {name}',
+    downloading: 'Downloading device agent…',
+    download_finished: 'Device agent ready',
+    download_failed: 'Failed to download the device agent'
   },
   update: {
     announce: 'New FlockFlasher release available',

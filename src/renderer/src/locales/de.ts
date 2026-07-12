@@ -104,7 +104,10 @@ export default {
     install: 'Beenden und Update installieren ?'
   },
   agent: {
-    currently_running: 'Derzeit läuft: {name}'
+    currently_running: 'Derzeit läuft: {name}',
+    downloading: 'Geräte-Agent wird heruntergeladen…',
+    download_finished: 'Geräte-Agent bereit',
+    download_failed: 'Geräte-Agent konnte nicht heruntergeladen werden'
   },
   errors: {
     invalid_sudo_password: 'Das eingegebene Passwort ist falsch',

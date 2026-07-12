@@ -1,5 +1,5 @@
 import path from 'path'
-import { FlashItem, Progress } from '../../types'
+import { AgentDownloadStatus, FlashItem, Progress } from '../../types'
 import { downloadFile } from '../utils'
 import { REFLASHER_CONFIG_PATH } from './boards'
 import { childProcess, execAsync, spawnAsync } from './permissions'
@@ -27,6 +27,9 @@ class AgentManager extends EventEmitter {
   private activeItem: FlashItem | null = null
   private state: AgentState = 'inactive'
   private downloadPromise: Promise<void> | null = null
+  // Latest agent-download status, retained so a renderer that subscribes after the
+  // startup download already began can pull the current state (see getDownloadStatus).
+  private downloadStatus: AgentDownloadStatus = { state: 'idle' }
   private agentProcess: ChildProcessWithoutNullStreams | null = null
   private agentDir = path.join(REFLASHER_CONFIG_PATH, 'agent')
   private availableVersionsURL =
@@ -184,19 +187,36 @@ class AgentManager extends EventEmitter {
     })
   }
 
+  // Records the latest download status and pushes it to any listener (the main
+  // process forwards it to the renderer over 'agent-download-progress').
+  private emitDownloadStatus(status: AgentDownloadStatus) {
+    this.downloadStatus = status
+    this.emit('download-progress', status)
+  }
+
+  // Current agent-download status. The renderer pulls this on startup so it can
+  // show progress even when the download began before its listener was attached.
+  getDownloadStatus(): AgentDownloadStatus {
+    return this.downloadStatus
+  }
+
   async init() {
     await this.createAgentDirIfNotExists()
 
     const shouldDownload = await this.shouldDownloadAgent()
     if (shouldDownload) {
       try {
-        this.emit('download-progress', { state: 'downloading' })
+        this.emitDownloadStatus({ state: 'downloading' })
         await this.downloadAgent((progress) => {
-          this.emit('download-progress', { state: 'downloading', progress })
+          this.emitDownloadStatus({ state: 'downloading', progress })
         })
+        this.emitDownloadStatus({ state: 'finished' })
+      } catch (err) {
+        // Surface the failure to the UI instead of masking it as 'finished'.
+        this.emitDownloadStatus({ state: 'failed' })
+        throw err
       } finally {
         this.downloadPromise = null
-        this.emit('download-progress', { state: 'finished' })
       }
     }
   }

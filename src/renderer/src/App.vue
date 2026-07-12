@@ -9,6 +9,7 @@ import Devices from './components/Devices.vue'
 import SudoDialog from './components/SudoDialog.vue'
 import Snackbar from './components/Snackbar.vue'
 import UpdateBanner from './components/UpdateBanner.vue'
+import AgentDownloadProgress from './components/AgentDownloadProgress.vue'
 
 const sudoDialog = ref()
 const drivesDrawer = ref(false)
@@ -144,6 +145,7 @@ watch(sudoDialog, (newVal) => {
     <SudoDialog ref="sudoDialog" />
     <Snackbar />
     <UpdateBanner />
+    <AgentDownloadProgress />
   </v-app>
 </template>
 

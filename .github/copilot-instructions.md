@@ -11,18 +11,19 @@ npm run build          # Typecheck + electron-vite build
 npm run typecheck      # tsc for main/preload (tsconfig.node.json) + vue-tsc for renderer (tsconfig.web.json)
 npm test               # Vitest unit tests (test/*.test.ts) — pure logic in src/main/security + utils
 npm run test:watch     # Vitest watch mode
-npm run lint           # ESLint with --fix
-npm run format         # Prettier
+npm run lint           # ESLint 9 flat config (eslint.config.mjs) with --fix
+npm run format         # Prettier (owns formatting; eslint uses flat/essential + skip-formatting)
 npm run release        # electron-builder (publishes to GitHub releases)
-npm run build:mac      # Build + release macOS x64 (publishes always)
-npm run build:macm1    # Build + release macOS arm64
+npm run build:macm1    # Build + release macOS arm64 (the amd64/x64 mac build was dropped)
 npm run build:win      # Build + release Windows
 npm run build:linux    # Build + release Linux AppImage
 ```
-Vitest covers only the pure, Electron-free modules (validation, sudo-arg building, sha256, progress math); elevated flashing and drive I/O are covered by manual per-OS smoke tests. VS Code users can use the "Debug All" compound launch config (main + renderer debugging). Dev/CI Node is pinned by `.nvmrc` + `engines` to Node 18 (`nvm use`).
+Vitest covers only the pure, Electron-free modules (validation, sudo-arg building, sha256, progress math); elevated flashing and drive I/O are covered by manual per-OS smoke tests. VS Code users can use the "Debug All" compound launch config (main + renderer debugging). Dev/CI Node is pinned by `.nvmrc` + `engines` to Node 22 (`nvm use`).
+
+**Native build requirement (macOS):** `drivelist` and `mountutils` compile from source (no arm64 prebuilds), so `npm install` needs working Command Line Tools **with the C++ stdlib headers in the toolchain path**. On very new macOS/Xcode a stale CLT can miss them (`fatal error: 'functional'/'cstdlib' file not found`); fix with `sudo rm -rf /Library/Developer/CommandLineTools && sudo xcode-select --install` (or install full Xcode). Natives are (re)built for Electron's ABI by the `postinstall` → `electron-builder install-app-deps`; the same modules load in the elevated `ELECTRON_RUN_AS_NODE` flash subprocess, so their ABI must match Electron.
 
 ## Critical Constraints
-- **Electron is pinned to 19.x** — etcher-sdk breaks on Electron 20+ due to security changes (https://github.com/balena-io/etcher/issues/4087). Do not upgrade Electron.
+- **Electron 43 + etcher-sdk 10.** The old Electron-19 pin (etcher-sdk broke on Electron 20+, balena-io/etcher#4087) is lifted: etcher-sdk 10 + Electron 37+ is what balena Etcher itself ships, and etcher-sdk runs only in the spawned Node subprocess, never the renderer. When bumping Electron, change **both** `package.json` `electron` and `electron-builder.yml` `electronVersion`, then rebuild natives. Note Electron removed `File.path` — the renderer resolves dropped-file paths via `webUtils.getPathForFile` exposed through the preload (`window.api.getPathForFile`).
 - Flashing requires root/admin. On macOS/Linux the app spawns `sudo` subprocesses; on Windows the whole app runs elevated (`requestedExecutionLevel: requireAdministrator`).
 - `~/.Reflasher` is the app's config/cache directory (downloaded OS images, agent binary, `supportedBoardsImages.json`).
 - Board/image metadata and binaries are fetched from `https://instance-registry.ironflock.com`.
@@ -41,15 +42,16 @@ The `RPC` enum in `src/types/index.ts` is the single registry of invoke channel 
 The main process runs as **root**, and `.flock`/`.reswarm` files plus board metadata are **untrusted input**. Two rules hold the line:
 - **Never interpolate untrusted data into a shell string or into elevated-script source.** All privileged commands go through argv: `elevatedSpawn(cmd, argsArray)` / `spawnAsync` (no shell, no `command.split(' ')`) in `permissions.ts`. The two elevated Node scripts are FIXED constants in `security/elevated-scripts.ts` that read their inputs from `process.argv`; `elevatedNodeChildProcess(code, scriptArgs)` passes data as argv. There is a test (`test/elevated-scripts.test.ts`) asserting these scripts contain no `${…}`.
 - **Validate at the boundary.** `security/validation.ts` (`assertValidDevicePath`, `assertValidReswarmConfig`, `isSafePathSegment`) is enforced in every privileged `ipcHandlers.ts` handler and again at config ingestion in `flash.ts`. `ipcHandlers` also cross-checks the flash target against `listDrives()` so the renderer can't aim a write at a system disk. `RPC.ReadFile` is scoped to `.flock`/`.reswarm` reads only.
-- Downloaded artifacts are verified: `security/integrity.ts` (`verifyFileSha256`) is wired into the image download (`flash.ts` checks `ImageInfo.sha256` on the decompressed image); `downloadFile` (`utils/index.ts`) checks HTTP status, verifies byte count, and writes to a `.part` temp then atomically renames.
+- Downloaded artifacts are verified: `security/integrity.ts` (`verifyFileSha256`) is wired into the image download — `flash.ts` checks `ImageInfo.sha256` against the **compressed `.gz` download** (the registry publishes the digest of the compressed artifact, matching `ImageInfo.size` = the `.gz` content-length) before decompressing; `downloadFile` (`utils/index.ts`) checks HTTP status, verifies byte count, and writes to a `.part` temp then atomically renames.
 - Renderer runs with `nodeIntegration:false` + `contextIsolation:true`; navigation is confined to the app origin (`will-navigate`/`will-redirect` in `index.ts`). `sandbox:true` is still pending (needs a self-contained preload) — see the Electron upgrade note below.
 
-### Elevated flashing (`flash.ts` + `permissions.ts` + `utils/index.ts`)
-`flashDevice()` runs the FIXED `FLASH_SCRIPT` (from `security/elevated-scripts.ts`) with the Electron binary in Node mode (`ELECTRON_RUN_AS_NODE=1`, `process.execPath`) so users don't need Node installed. The image path, drive JSON, final state and etcher-sdk module path are passed as `process.argv[2..5]` — never interpolated into the script.
-- macOS/Linux: spawned via `sudo -E -S` with the sudo password piped to stdin. The password is collected by `SudoDialog.vue` and held in memory in `permissions.ts` (never persisted).
-- Windows: no elevation needed (app already runs as admin). No path escaping is required anymore — argv values are passed literally.
-- In production, the script requires etcher-sdk from inside the packaged archive: `app.asar/node_modules` (see `getNodeModulesResourcePath`). On Linux AppImage the app image must first be loop-mounted to a temp dir to reach those resources (`mountAppImage` in `permissions.ts`).
-- Progress flows back as JSON `Progress` objects written to the subprocess stdout, parsed by the parent, and forwarded to the renderer. Cancellation sends SIGTERM (via elevated `kill` on macOS).
+### Elevated flashing (`flash.ts` + `permissions.ts` + `utils/index.ts`) — flashing runtime
+`flashDevice()` runs the FIXED `FLASH_SCRIPT` (from `security/elevated-scripts.ts`) under a **bundled standalone Node binary** (`getNodeBinaryPath()` → `resources/binaries/<platform>/node`, `useBundledNode: true`), NOT the Electron binary. **Why:** Electron's V8 memory cage (Electron 21+) forbids external buffers, which etcher-sdk's `@ronomon/direct-io` needs for O_DIRECT block writes — running the flasher via `ELECTRON_RUN_AS_NODE` aborts (`napi_create_external_buffer` assertion). A real Node has no cage. This is the real reason the app was historically pinned to Electron 19. The image path, drive JSON, final state and etcher-sdk module path are passed as `process.argv[2..5]` — never interpolated into the script.
+- **Native ABI split:** etcher-sdk's flash-path native deps `drivelist`, `@ronomon/direct-io`, `xxhash-addon` are **N-API** (ABI-stable → one build works under both Electron and the bundled Node). `mountutils` is **nan** (ABI-specific); etcher-sdk always loads it to unmount a drive before writing (`block-device.js`), and the `unmountDisk` IPC path uses it too. Both those paths run under the bundled Node, so `scripts/rebuild-flash-natives.js` (postinstall, after `install-app-deps`) rebuilds mountutils for the bundled **Node** ABI with `-std=c++17`. The Electron main process never loads mountutils in-process (only `drivelist` via the scanner), so this is safe. Re-running `install-app-deps` reverts mountutils to Electron's ABI — re-run `rebuild-flash-natives.js` after.
+- The bundled Node binary is fetched per-platform by `scripts/fetch-node.js` (postinstall, git-ignored) and pinned via `NODE_VERSION` (keep it in sync between `fetch-node.js` and `rebuild-flash-natives.js`).
+- macOS/Linux: spawned via `sudo -E -S` with the sudo password piped to stdin (collected by `SudoDialog.vue`, held in memory in `permissions.ts`, never persisted). Windows: no elevation needed (app already runs as admin).
+- **Module resolution:** the bundled real Node cannot read inside `app.asar`, so etcher-sdk + mountutils are requested from `app.asar.unpacked/node_modules` (`getNodeModulesResourcePath(name, { unpacked: true })`), and `node_modules/**` is `asarUnpack`'d in `electron-builder.yml`. In dev the path is `app.getAppPath()/node_modules`. On Linux AppImage the image is loop-mounted first (`mountAppImage`).
+- Progress flows back as JSON `Progress` objects on the subprocess stdout, parsed by the parent, forwarded to the renderer. Cancellation sends SIGTERM (via elevated `kill` on macOS).
 
 ### Flash pipeline for `.flock` / `.reswarm` items (`getReswarmImage` in `flash.ts`)
 1. The config file is JSON containing the target board; the board's latest OS image (gzipped) is downloaded to `~/.Reflasher` and gunzipped (`boards.ts` / `ImageManager`), skipped if cached.

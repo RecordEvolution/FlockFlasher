@@ -1,0 +1,51 @@
+// Rebuilds the flash subprocess's ABI-specific native modules for the BUNDLED Node
+// (see scripts/fetch-node.js), NOT Electron. Runs after `electron-builder
+// install-app-deps` (which builds everything for Electron's ABI) so the final state
+// is: N-API modules (drivelist, @ronomon/direct-io, xxhash-addon) work under both
+// runtimes, and mountutils (nan — ABI-specific) is built for the bundled Node.
+//
+// Why: the elevated flash + unmount subprocesses run under the bundled Node (Electron's
+// V8 memory cage forbids the external buffers etcher-sdk/direct-io needs). The Electron
+// main process never loads mountutils in-process (only the subprocesses do), so building
+// it for the Node ABI does not break the GUI. See README "Flashing runtime".
+//
+// Re-run this if you ever run `electron-builder install-app-deps` or `npm rebuild`
+// again, since those revert mountutils to Electron's ABI.
+
+const path = require('path')
+const { execFileSync } = require('child_process')
+
+// Keep in sync with scripts/fetch-node.js.
+const NODE_VERSION = '22.19.0'
+
+// nan-based modules used on the flash/unmount path that must match the bundled Node.
+const NAN_MODULES = ['mountutils']
+
+const arch = process.platform === 'darwin' ? process.arch : 'x64'
+
+for (const mod of NAN_MODULES) {
+  const cwd = path.join(__dirname, '..', 'node_modules', mod)
+  console.log(`[rebuild-flash-natives] building ${mod} for Node v${NODE_VERSION} (${arch})`)
+  execFileSync(
+    process.execPath,
+    [
+      path.join(__dirname, '..', 'node_modules', '.bin', 'node-gyp'),
+      'rebuild',
+      `--target=${NODE_VERSION}`,
+      `--arch=${arch}`,
+      '--dist-url=https://nodejs.org/dist'
+    ],
+    {
+      cwd,
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        // Node 22's V8 headers require C++17 (std::is_void_v etc.); Electron's build
+        // sets this for us, a bare node-gyp build does not.
+        CXXFLAGS: `${process.env.CXXFLAGS ?? ''} -std=c++17`.trim()
+      }
+    }
+  )
+}
+
+console.log('[rebuild-flash-natives] done')

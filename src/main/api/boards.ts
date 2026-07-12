@@ -147,14 +147,17 @@ export default class ImageManager {
       zipTransform.on('error', onError)
       writeStream.on('error', onError)
 
-      // Count decompressed output bytes so percentage matches image.size (uncompressed).
-      zipTransform.on('data', (chunk: Buffer) => {
+      // image.size is the COMPRESSED .gz size (the registry publishes the download's
+      // content-length), so track compressed bytes READ against it for a correct
+      // 0-100%. Counting decompressed output would overshoot badly — the image is
+      // several times larger than its .gz.
+      readStream.on('data', (chunk: string | Buffer) => {
         written += chunk.length
         if (progress && image.size > 0) {
           const elapsedTime = (Date.now() - startTime) / 1000
           const { speed, averageSpeed } = calculateSpeed(written, elapsedTime)
           const eta = calculateETA(written, speed, image.size)
-          const percentage = (written / image.size) * 100
+          const percentage = Math.min(100, (written / image.size) * 100)
           progress({ percentage, averageSpeed, eta, speed, bytesWritten: written })
         }
       })

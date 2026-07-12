@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { RPC } from '../types'
 import type { AgentDownloadStatus, FlashItem, SupportedBoard } from '../types'
@@ -33,6 +33,9 @@ const api = {
   chooseFile: () => ipcRenderer.invoke(RPC.ChooseFile) as Promise<Electron.OpenDialogReturnValue>,
   // Scoped in the main process to .flock/.reswarm config files; returns utf8 text.
   readFile: (path: string) => ipcRenderer.invoke(RPC.ReadFile, path) as Promise<string>,
+  // Electron 32+ removed File.path; getPathForFile is the supported way to resolve
+  // the absolute path of a drag-and-dropped file from the renderer.
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
   getSupportedBoards: () => ipcRenderer.invoke(RPC.GetSupportedBoards) as Promise<SupportedBoard[]>,
   scanWifi: () => ipcRenderer.invoke(RPC.ScanWifi) as Promise<WiFiNetwork[]>,
   testDevice: (flashItem: FlashItem) => ipcRenderer.invoke(RPC.TestDevice, flashItem),

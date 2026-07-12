@@ -3,7 +3,7 @@ import fs from 'fs/promises'
 import { tmpdir } from 'os'
 import path from 'path'
 import { v4 as uuidv4 } from 'uuid'
-import { fileExists } from '../utils'
+import { fileExists, getNodeBinaryPath } from '../utils'
 import { is } from '@electron-toolkit/utils'
 import { buildSudoArgs } from '../security/args'
 
@@ -45,21 +45,43 @@ export const getSudoPassword = () => {
   return sudoPassword
 }
 
+// `useBundledNode` runs the script under the bundled standalone Node binary instead
+// of the Electron binary in ELECTRON_RUN_AS_NODE mode. The flash and unmount paths
+// both use it: the flash needs it because Electron's V8 memory cage rejects the
+// external buffers etcher-sdk/direct-io needs; the unmount needs it because
+// mountutils (nan) is rebuilt for the bundled Node's ABI, not Electron's.
 export const elevatedNodeChildProcess = (
   code: string,
   scriptArgs: string[] = [],
   onStdout?: (data: string) => void,
   onStderr?: (data: string) => void,
   onExit?: (code: number | null, signal: NodeJS.Signals | null) => void,
-  options?: SpawnOptionsWithoutStdio
+  options?: SpawnOptionsWithoutStdio,
+  useBundledNode = false
 ) => {
   const platform = process.platform
   if (platform === 'darwin' || platform === 'linux') {
-    return elevatedNodeChildProcessUnix(code, scriptArgs, onStdout, onStderr, onExit, options)
+    return elevatedNodeChildProcessUnix(
+      code,
+      scriptArgs,
+      onStdout,
+      onStderr,
+      onExit,
+      options,
+      useBundledNode
+    )
   }
 
   // No need to elevate the child process in Windows as the Windows app will run in elevated mode anyways
-  return nodeChildProcessWindows(code, scriptArgs, onStdout, onStderr, onExit, options)
+  return nodeChildProcessWindows(code, scriptArgs, onStdout, onStderr, onExit, options, useBundledNode)
+}
+
+// Env for the bundled-node subprocess: a copy of the parent env with the Electron
+// node flag removed (the bundled binary is real Node, not Electron).
+const bundledNodeEnv = (): NodeJS.ProcessEnv => {
+  const env = { ...process.env }
+  delete env.ELECTRON_RUN_AS_NODE
+  return env
 }
 
 export const execAsync = async (
@@ -164,22 +186,32 @@ const elevatedNodeChildProcessUnix = async (
   onStdout?: (data: string) => void,
   onStderr?: (data: string) => void,
   onExit?: (code: number | null, signal: NodeJS.Signals | null) => void,
-  options?: SpawnOptionsWithoutStdio
+  options?: SpawnOptionsWithoutStdio,
+  useBundledNode = false
 ) => {
   const uniqueID = uuidv4()
   const fileName = uniqueID + '.js'
   const scriptPath = path.join(is.dev ? process.resourcesPath : tmpdir(), fileName)
-  let command = process.execPath
 
+  // On an AppImage the resources (bundled node binary + node_modules) live inside
+  // the image, so it must be loop-mounted before the elevated subprocess can reach
+  // them — needed for both the bundled-node and Electron-node paths.
   if (process.platform === 'linux' && process.env.APPIMAGE) {
     await cleanupAppImageIfExists()
-
     await mountAppImage()
+  }
 
-    const executableName = is.dev ? 'reflasher' : process.execPath.split('/').pop()
-    if (!executableName) throw new Error('executable name in execPath is undefined')
-
-    command = path.join(APPIMAGE_MOUNT_POINT, executableName)
+  let command: string
+  if (useBundledNode) {
+    // Real Node (no V8 memory cage) — required for the flash subprocess.
+    command = getNodeBinaryPath()
+  } else {
+    command = process.execPath
+    if (process.platform === 'linux' && process.env.APPIMAGE) {
+      const executableName = is.dev ? 'reflasher' : process.execPath.split('/').pop()
+      if (!executableName) throw new Error('executable name in execPath is undefined')
+      command = path.join(APPIMAGE_MOUNT_POINT, executableName)
+    }
   }
 
   // Script is written with owner-only permissions since it is executed as root.
@@ -204,7 +236,7 @@ const elevatedNodeChildProcessUnix = async (
     },
     {
       ...options,
-      env: { ELECTRON_RUN_AS_NODE: '1' },
+      env: useBundledNode ? bundledNodeEnv() : { ELECTRON_RUN_AS_NODE: '1' },
       elevated: true
     }
   )
@@ -319,7 +351,8 @@ const nodeChildProcessWindows = async (
   onStdout?: (data: string) => void,
   onStderr?: (data: string) => void,
   onExit?: (code: number | null, signal: NodeJS.Signals | null) => void,
-  options?: SpawnOptionsWithoutStdio
+  options?: SpawnOptionsWithoutStdio,
+  useBundledNode = false
 ) => {
   const uniqueID = uuidv4()
   const fileName = uniqueID + '.js'
@@ -327,7 +360,9 @@ const nodeChildProcessWindows = async (
 
   await fs.writeFile(scriptPath, code, { mode: 0o700 })
 
-  const command = process.execPath
+  // The Windows app already runs elevated, so no sudo wrapper is needed here. The
+  // flash path still needs REAL node (bundled) to avoid Electron's memory cage.
+  const command = useBundledNode ? getNodeBinaryPath() : process.execPath
   const args = [scriptPath, ...scriptArgs]
 
   return childProcess(
@@ -344,7 +379,7 @@ const nodeChildProcessWindows = async (
     },
     {
       ...options,
-      env: { ELECTRON_RUN_AS_NODE: '1' }
+      env: useBundledNode ? bundledNodeEnv() : { ELECTRON_RUN_AS_NODE: '1' }
     }
   )
 }

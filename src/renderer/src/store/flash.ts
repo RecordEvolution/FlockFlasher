@@ -123,7 +123,12 @@ export const useFlashStore = () => {
         document.body.addEventListener('drop', (evt) => {
           evt.preventDefault()
 
-          const { path: filePath } = evt?.dataTransfer?.files[0] ?? {}
+          // Electron 32+ removed File.path; resolve the dropped file's path via the
+          // webUtils bridge exposed in the preload.
+          const file = evt?.dataTransfer?.files[0]
+          if (!file) return
+
+          const filePath = window.api.getPathForFile(file)
           if (!filePath) return
 
           const { ext } = path.parse(filePath)

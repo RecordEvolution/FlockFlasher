@@ -1,7 +1,7 @@
 import { toRaw, isRef, isReactive, isProxy } from 'vue'
 
 export function cutInfoString(infoString: string, maxLength: number, altString?: string) {
-  var theInfoString = ''
+  let theInfoString = ''
   if ((infoString == null || infoString === '') && altString) {
     theInfoString = altString
   } else {

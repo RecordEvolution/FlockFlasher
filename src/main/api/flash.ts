@@ -86,19 +86,17 @@ const getReswarmImage = async (
         updateState({ ...progress, type: 'downloading' })
       })
 
+      // Integrity: ImageInfo.sha256 is the digest of the COMPRESSED download (it
+      // matches ImageInfo.size, the .gz content-length), so verify the downloaded
+      // .gz — before decompressing, so a corrupt/tampered download never reaches
+      // the drive.
+      if (image.sha256) {
+        await verifyFileSha256(zippedImageTempPath, image.sha256)
+      }
+
       await imageManager.unZipImage(image, zippedImageTempPath, (progress) => {
         updateState({ ...progress, type: 'decompressing' })
       })
-
-      // Integrity: verify the decompressed image before it is ever flashed. We
-      // assume ImageInfo.sha256 is the digest of the decompressed image, matching
-      // ImageInfo.size (which is the uncompressed size). If a future backend hashes
-      // the compressed artifact instead, this must move to downloadFile's
-      // expectedSha256 — the flash smoke test will surface the mismatch immediately.
-      if (image.sha256) {
-        updateState({ type: 'configuring' })
-        await verifyFileSha256(realImageTempPath, image.sha256)
-      }
 
       await rename(realImageTempPath, realImagePath)
 
@@ -153,7 +151,9 @@ export const flashDevice = async (
 
   const stringifiedDrive = JSON.stringify(flashItem.drive)
   const finalType = flashItem.reswarm ? 'configuring' : 'finished'
-  const etcherSDKRequire = getNodeModulesResourcePath('etcher-sdk')
+  // Requested from app.asar.unpacked: the flash subprocess runs under real Node
+  // (below), which cannot require modules from inside the packed asar.
+  const etcherSDKRequire = getNodeModulesResourcePath('etcher-sdk', { unpacked: true })
 
   // FLASH_SCRIPT is a FIXED script body — no untrusted data is interpolated into
   // it. The image path, drive JSON, final state and etcher-sdk module path are
@@ -202,7 +202,11 @@ export const flashDevice = async (
       }
     },
     console.error,
-    handleOnExit
+    handleOnExit,
+    undefined,
+    // Run under the bundled real Node — Electron's V8 memory cage rejects the
+    // external buffers etcher-sdk/direct-io needs for O_DIRECT block writes.
+    true
   )
 
   activeFlashProcesses.set(flashItem.id, childProcess)

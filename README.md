@@ -129,7 +129,23 @@ These binaries are distributed using the [extraResources](https://www.electron.b
 
 You can find the binaries in the `resources/binaries` folder.
 
-## Important notes:
+## Flashing runtime (why there is a bundled Node binary)
 
-The etcher-sdk only works up to electron 19 due to security changes made in electron 20+
-- https://github.com/balena-io/etcher/issues/4087
+The app runs on **Electron 43 with etcher-sdk 10** (Node 22 via `.nvmrc`). The old Electron-19
+pin existed because etcher-sdk breaks on Electron 20+ (https://github.com/balena-io/etcher/issues/4087):
+Electron's **V8 memory cage** (Electron 21+) forbids the *external buffers* that etcher-sdk's
+`@ronomon/direct-io` needs for `O_DIRECT` block writes, so running the flasher via
+`ELECTRON_RUN_AS_NODE` aborts (`napi_create_external_buffer` assertion).
+
+The fix: the elevated flash + unmount subprocesses run under a **bundled standalone Node binary**
+(no memory cage), fetched per-platform by `scripts/fetch-node.js` (postinstall, git-ignored) into
+`resources/binaries/<platform>/`. The flash-path native deps that are N-API (`drivelist`,
+`@ronomon/direct-io`, `xxhash-addon`) work under both runtimes unchanged; `mountutils` (nan) is
+rebuilt for the bundled Node's ABI by `scripts/rebuild-flash-natives.js` (postinstall, after
+`install-app-deps`). Keep `NODE_VERSION` in sync between those two scripts. When upgrading Electron,
+bump both `package.json` `electron` and `electron-builder.yml` `electronVersion`.
+
+The native modules (`drivelist`, `mountutils`) compile from source on macOS, so `npm install`
+needs a complete Command Line Tools install. If it fails with `'functional'`/`'cstdlib' file not
+found`, the CLT is missing its C++ stdlib headers — reinstall it:
+`sudo rm -rf /Library/Developer/CommandLineTools && sudo xcode-select --install`.

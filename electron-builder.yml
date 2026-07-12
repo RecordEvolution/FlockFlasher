@@ -12,6 +12,11 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 asarUnpack:
   - resources/**
+  # The elevated FLASH subprocess runs under the bundled real Node (resources/binaries),
+  # which cannot read modules from inside the packed asar. Unpack node_modules so it can
+  # require etcher-sdk and its dependency closure. (Electron-node consumers still read the
+  # asar transparently, so the unmount path is unaffected.)
+  - node_modules/**
 win:
   executableName: FlockFlasher
   requestedExecutionLevel: requireAdministrator
@@ -71,7 +76,7 @@ fileAssociations:
     icon: src/assets/icons/icon.icns
     mimeType: text/x-reswarm
     role: Viewer
-electronVersion: 19.1.9 # Version
+electronVersion: 43.1.0 # Version
 # NOTE: auto-update publishing is configured per-target (github) in the win/mac/linux
 # blocks above. There is intentionally no top-level generic publish block: the old
 # `https://example.com/auto-updates` placeholder pointed updates at a domain the

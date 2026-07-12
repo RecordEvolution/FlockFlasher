@@ -5,3 +5,6 @@ out
 *.log*
 .DS_Store
 AuthKey*
+# Fetched at build time by scripts/fetch-node.js (used to run the elevated flash subprocess)
+resources/binaries/*/node
+resources/binaries/*/node.exe

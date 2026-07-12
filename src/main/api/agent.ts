@@ -6,7 +6,6 @@ import { childProcess, execAsync, spawnAsync } from './permissions'
 import fs, { access, mkdir } from 'fs/promises'
 import { ChildProcessWithoutNullStreams } from 'child_process'
 import { EventEmitter } from 'stream'
-import fetch from 'node-fetch'
 
 type AgentState = 'active' | 'inactive' | 'failed'
 

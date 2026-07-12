@@ -170,10 +170,20 @@ export const waitForMount = async (description: string, timeoutMs = 60000) => {
 }
 
 export async function unmountDisk(drivePath: string) {
-  const mountutilsRequire = getNodeModulesResourcePath('mountutils')
+  // mountutils is (nan) built for the bundled Node's ABI, so the unmount script must
+  // run under that same bundled Node — not the Electron binary. Requested from the
+  // unpacked node_modules because real Node cannot read inside the packed asar.
+  const mountutilsRequire = getNodeModulesResourcePath('mountutils', { unpacked: true })
 
   // The drive path and the module path are passed to the elevated script as argv,
-  // never interpolated into its source, so they can't inject code. The Windows
-  // backslash-escaping hack is gone with the string interpolation it worked around.
-  return elevatedNodeChildProcess(UNMOUNT_SCRIPT, [drivePath, mountutilsRequire])
+  // never interpolated into its source, so they can't inject code.
+  return elevatedNodeChildProcess(
+    UNMOUNT_SCRIPT,
+    [drivePath, mountutilsRequire],
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    true
+  )
 }

@@ -1,3 +1,5 @@
+set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
+
 # FlockFlasher — dev & release helpers. Run `just` to list recipes.
 
 ROOT_DIR := justfile_directory()

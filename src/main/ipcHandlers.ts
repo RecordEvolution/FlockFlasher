@@ -19,13 +19,17 @@ const MAX_CONFIG_READ_BYTES = 5 * 1024 * 1024
 
 // Cross-check a renderer-supplied drive against the real removable-drive list so a
 // compromised renderer can't aim a privileged write at an arbitrary/system disk.
-async function assertFlashableDrive(drive: Drive | undefined): Promise<void> {
+// Returns the matched drivelist Drive so the caller flashes the trusted, freshly
+// enumerated object (correct raw/device/size/blockSize) rather than trusting the
+// renderer-supplied fields.
+async function assertFlashableDrive(drive: Drive | undefined): Promise<Drive> {
   const device = assertValidDevicePath(drive?.device)
   const available = await listDrives()
   const match = available.find((d) => d.device === device)
   if (!match) {
     throw new Error(`Selected drive is not an available removable drive: ${device}`)
   }
+  return match
 }
 
 function handleListDrives() {
@@ -120,7 +124,8 @@ async function handleFlashDevice(_, mainWindow: BrowserWindow, flashItem: FlashI
   if (!flashItem || typeof flashItem.fullPath !== 'string') {
     throw new Error('Invalid flash item')
   }
-  await assertFlashableDrive(flashItem.drive)
+  // Flash the trusted, freshly enumerated drive object, not the renderer-supplied one.
+  flashItem.drive = await assertFlashableDrive(flashItem.drive)
   if (flashItem.reswarm?.config) {
     assertValidReswarmConfig(flashItem.reswarm.config)
   }

@@ -17,7 +17,12 @@ const path = require('path')
 const https = require('https')
 const { execFileSync } = require('child_process')
 
-const NODE_VERSION = '22.19.0'
+// Node 24, not 22: Node 22.19's bundled libuv appends a trailing backslash to
+// `\\.\PhysicalDrive<n>` device paths, so etcher-sdk's fs.open(raw) hits Windows'
+// CreateFileW with `\\.\PhysicalDrive1\` (directory semantics) and fails with EINVAL
+// when elevated. Node 24 normalizes the device path correctly. Keep in sync with
+// scripts/rebuild-flash-natives.js.
+const NODE_VERSION = '24.18.0'
 
 const platform = process.platform // 'darwin' | 'win32' | 'linux'
 const arch = platform === 'darwin' ? process.arch : 'x64' // mac follows host arch; win/linux x64

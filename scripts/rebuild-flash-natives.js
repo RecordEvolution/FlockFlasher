@@ -15,8 +15,16 @@
 const path = require('path')
 const { execFileSync } = require('child_process')
 
-// Keep in sync with scripts/fetch-node.js.
-const NODE_VERSION = '22.19.0'
+// Resolve node-gyp's real JS entry point rather than the node_modules/.bin shim.
+// On Windows the .bin/node-gyp file is a bash wrapper (no .cmd extension), and
+// handing it to process.execPath (node.exe) fails with a JS syntax error; the .js
+// entry runs identically under node on every platform.
+const nodeGypBin = require.resolve('node-gyp/bin/node-gyp.js')
+
+// Keep in sync with scripts/fetch-node.js. Node 24 (not 22): Node 22.19's libuv
+// mangles `\\.\PhysicalDrive<n>` paths (trailing backslash -> EINVAL on elevated
+// flash); Node 24 opens them correctly.
+const NODE_VERSION = '24.18.0'
 
 // nan-based modules used on the flash/unmount path that must match the bundled Node.
 const NAN_MODULES = ['mountutils']
@@ -29,7 +37,7 @@ for (const mod of NAN_MODULES) {
   execFileSync(
     process.execPath,
     [
-      path.join(__dirname, '..', 'node_modules', '.bin', 'node-gyp'),
+      nodeGypBin,
       'rebuild',
       `--target=${NODE_VERSION}`,
       `--arch=${arch}`,
